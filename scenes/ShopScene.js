@@ -143,24 +143,61 @@ class ShopScene extends Phaser.Scene {
     }
 
     createMuteButton() {
-        this.muteText = this.add.text(1230, 30, isMuted ? '🔇' : '🔊', {
-            fontSize: '48px'
-        }).setOrigin(0.5);
-        this.muteText.setInteractive();
+        const x = 1230;
+        const y = 30;
+        
+        // Create container for the icon
+        this.muteButton = this.add.container(x, y);
+        
+        // Draw the speaker icon
+        this.drawMuteIcon();
+        
+        // Make it interactive
+        const hitArea = new Phaser.Geom.Circle(0, 0, 25);
+        this.muteButton.setInteractive(hitArea, Phaser.Geom.Circle.Contains);
 
-        this.muteText.on('pointerover', () => {
-            this.muteText.setScale(1.2);
+        this.muteButton.on('pointerover', () => {
+            this.muteButton.setScale(1.2);
         });
 
-        this.muteText.on('pointerout', () => {
-            this.muteText.setScale(1);
+        this.muteButton.on('pointerout', () => {
+            this.muteButton.setScale(1);
         });
 
-        this.muteText.on('pointerdown', () => {
+        this.muteButton.on('pointerdown', () => {
             isMuted = !isMuted;
             localStorage.setItem('goalDefenderMuted', isMuted);
-            this.muteText.setText(isMuted ? '🔇' : '🔊');
+            this.drawMuteIcon();
         });
+    }
+    
+    drawMuteIcon() {
+        // Clear previous graphics
+        this.muteButton.removeAll(true);
+        
+        const graphics = this.add.graphics();
+        graphics.fillStyle(0xffffff, 1);
+        
+        // Speaker body
+        graphics.fillRect(-15, -8, 10, 16);
+        graphics.fillTriangle(-5, -8, -5, 8, 5, 15, 5, -15);
+        
+        if (!isMuted) {
+            // Sound waves
+            graphics.lineStyle(3, 0xffffff, 1);
+            graphics.arc(5, 0, 10, -Math.PI/4, Math.PI/4, false);
+            graphics.strokePath();
+            graphics.arc(5, 0, 16, -Math.PI/4, Math.PI/4, false);
+            graphics.strokePath();
+        } else {
+            // Mute X
+            graphics.lineStyle(3, 0xff0000, 1);
+            graphics.lineBetween(8, -10, 18, 0);
+            graphics.lineBetween(18, 0, 8, 10);
+            graphics.strokePath();
+        }
+        
+        this.muteButton.add(graphics);
     }
 
     createBallCard(ball, x, y) {
