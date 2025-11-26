@@ -203,6 +203,30 @@ class MenuScene extends Phaser.Scene {
             });
         }
         
+        // Mute/Unmute button
+        this.createMuteButton();
+
         console.log('MenuScene loaded - Phase 8 complete');
+    }
+
+    createMuteButton() {
+        this.muteText = this.add.text(1230, 30, isMuted ? '🔇' : '🔊', {
+            fontSize: '48px'
+        }).setOrigin(0.5);
+        this.muteText.setInteractive();
+
+        this.muteText.on('pointerover', () => {
+            this.muteText.setScale(1.2);
+        });
+
+        this.muteText.on('pointerout', () => {
+            this.muteText.setScale(1);
+        });
+
+        this.muteText.on('pointerdown', () => {
+            isMuted = !isMuted;
+            localStorage.setItem('goalDefenderMuted', isMuted);
+            this.muteText.setText(isMuted ? '🔇' : '🔊');
+        });
     }
 }

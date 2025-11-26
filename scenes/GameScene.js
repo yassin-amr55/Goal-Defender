@@ -152,6 +152,17 @@ class GameScene extends Phaser.Scene {
             this.ballSpeed = 300 * this.speedMultiplier; // Affected by ball ability
             this.ball.setVelocity(-this.ballSpeed, 0);
             
+            // PHASE 12: Add ball trail at higher speed (will be visible when speed increases)
+            this.ballTrail = this.add.particles(this.ball.x, this.ball.y, finalTexture, {
+                speed: 50,
+                scale: { start: 0.15, end: 0 },
+                alpha: { start: 0.5, end: 0 },
+                lifespan: 300,
+                frequency: 50,
+                follow: this.ball
+            });
+            this.ballTrail.setDepth(0);
+            
             console.log('Ball created with texture:', finalTexture);
             console.log('Equipped ball:', this.equippedBall);
             
@@ -341,6 +352,25 @@ class GameScene extends Phaser.Scene {
         noise.stop(this.audioContext.currentTime + 0.5);
     }
 
+    playBounceSound() {
+        if (isMuted) return;
+        // PHASE 13: Generate a bounce sound
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+        
+        oscillator.frequency.value = 300; // Lower pitch than click
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.2, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
+        
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + 0.15);
+    }
+
     triggerGameOver() {
         // PHASE 7: Explosion effect and fade to game over
         console.log('Ball fully entered goal - Game Over!');
@@ -426,6 +456,18 @@ class GameScene extends Phaser.Scene {
             this.scoreText.setText('Score: ' + this.score);
             this.speedText.setText('Speed Boost: ' + this.speedBoost + '%');
             
+            // PHASE 12: Screen shake on click
+            this.cameras.main.shake(100, 0.005);
+            
+            // PHASE 12: Flash effect when score increments
+            this.scoreText.setScale(1.3);
+            this.tweens.add({
+                targets: this.scoreText,
+                scale: 1,
+                duration: 200,
+                ease: 'Back.easeOut'
+            });
+            
             // Play click sound
             this.playClickSound();
             
@@ -444,6 +486,15 @@ class GameScene extends Phaser.Scene {
             if (this.hitboxRadius < this.minHitboxRadius) {
                 this.hitboxRadius = this.minHitboxRadius;
             }
+            
+            // PHASE 12: Shrinking hitbox pulse animation
+            this.tweens.add({
+                targets: this.hitboxCircle,
+                alpha: { from: 0.5, to: 0.3 },
+                duration: 500,
+                yoyo: true,
+                repeat: 1
+            });
             
             console.log('Hitbox shrunk to:', this.hitboxRadius, 'Min:', this.minHitboxRadius);
         } else {
@@ -470,6 +521,24 @@ class GameScene extends Phaser.Scene {
             }
             
             this.ball.setVelocity(-this.ballSpeed, newVerticalVelocity);
+            
+            // PHASE 12: Particles on wall bounce
+            const particles = this.add.particles(this.ball.x, this.ball.y, this.getBallTexture(), {
+                speed: { min: 100, max: 200 },
+                scale: { start: 0.15, end: 0 },
+                alpha: { start: 0.8, end: 0 },
+                lifespan: 400,
+                quantity: 10
+            });
+            
+            // Destroy particle emitter after particles are done
+            this.time.delayedCall(500, () => {
+                particles.destroy();
+            });
+            
+            // PHASE 13: Bounce sound
+            this.playBounceSound();
+            
             console.log('Ball bounced off wall with vertical velocity:', newVerticalVelocity);
         }
     }
@@ -485,6 +554,9 @@ class GameScene extends Phaser.Scene {
             // Keep horizontal velocity constant
             const horizontalVelocity = this.ball.body.velocity.x > 0 ? this.ballSpeed : -this.ballSpeed;
             this.ball.setVelocity(horizontalVelocity, jumpVelocity);
+            
+            // PHASE 13: Bounce sound
+            this.playBounceSound();
             
             console.log('Ball bounced off ground! Jump velocity:', jumpVelocity, 'Horizontal:', horizontalVelocity);
         }

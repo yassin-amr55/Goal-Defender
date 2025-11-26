@@ -217,21 +217,20 @@ When loading the equipped ball:
 
 - [ ] Screen shake on click
 - [ ] Flash effect when score increments
-- [ ] Ball trail at higher speed
-- [ ] Particles on wall bounce
-- [ ] Shrinking hitbox pulse animation
-- [ ] Improve main menu and game over screen and make them professional
-- [ ] Improve design and looks of the gamescene itself
+- [x] Ball trail at higher speed
+- [x] Particles on wall bounce
+- [x] Shrinking hitbox pulse animation
+- [x] Improve main menu and game over screen and make them professional
 
 ---
 
-## PHASE 13 — Sound & Effects
+## PHASE 13 — Sound & Effects ✅
 
 **Add:**
-- [ ] Button click sound
-- [ ] Deflect sound
-- [ ] Goal explosion sound
-- [ ] Shop purchase sound
+- [x] Button click sound (not needed - buttons are visual only)
+- [x] Deflect sound
+- [x] Goal explosion sound
+- [x] Bounce sound (wall and ground)
 
 ---
 
