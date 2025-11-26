@@ -47,17 +47,17 @@ class ShopScene extends Phaser.Scene {
         // Get player money
         this.playerMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0);
         
-        // Money container background
-        const moneyBg = this.add.rectangle(640, 110, 350, 60, 0x000000, 0.7);
+        // Money container background - top left
+        const moneyBg = this.add.rectangle(150, 40, 250, 50, 0x000000, 0.7);
         moneyBg.setStrokeStyle(3, 0xffff00);
         
-        // Show player money at top
-        this.moneyText = this.add.text(640, 110, 'MONEY: $' + this.playerMoney, {
-            fontSize: '38px',
+        // Show player money at top left
+        this.moneyText = this.add.text(150, 40, 'MONEY: $' + this.playerMoney, {
+            fontSize: '32px',
             fill: '#ffff00',
             fontStyle: 'bold',
             stroke: '#000000',
-            strokeThickness: 5,
+            strokeThickness: 4,
             shadow: {
                 offsetX: 2,
                 offsetY: 2,
@@ -148,15 +148,15 @@ class ShopScene extends Phaser.Scene {
         
         // Create the mute button sprite
         this.muteButton = this.add.image(x, y, isMuted ? 'volume-mute' : 'volume-unmute');
-        this.muteButton.setScale(0.15);
+        this.muteButton.setScale(0.08);
         this.muteButton.setInteractive();
 
         this.muteButton.on('pointerover', () => {
-            this.muteButton.setScale(0.18);
+            this.muteButton.setScale(0.1);
         });
 
         this.muteButton.on('pointerout', () => {
-            this.muteButton.setScale(0.15);
+            this.muteButton.setScale(0.08);
         });
 
         this.muteButton.on('pointerdown', () => {

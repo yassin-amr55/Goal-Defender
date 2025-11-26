@@ -215,15 +215,15 @@ class MenuScene extends Phaser.Scene {
         
         // Create the mute button sprite
         this.muteButton = this.add.image(x, y, isMuted ? 'volume-mute' : 'volume-unmute');
-        this.muteButton.setScale(0.15);
+        this.muteButton.setScale(0.08);
         this.muteButton.setInteractive();
 
         this.muteButton.on('pointerover', () => {
-            this.muteButton.setScale(0.18);
+            this.muteButton.setScale(0.1);
         });
 
         this.muteButton.on('pointerout', () => {
-            this.muteButton.setScale(0.15);
+            this.muteButton.setScale(0.08);
         });
 
         this.muteButton.on('pointerdown', () => {
