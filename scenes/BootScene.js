@@ -26,6 +26,10 @@ class BootScene extends Phaser.Scene {
         this.load.image('ball_steel', 'assets/balls/ball-steel.png');
         this.load.image('ball_ghost', 'assets/balls/ball-ghost.png');
         this.load.image('ball_spark', 'assets/balls/ball-spark.png');
+        
+        // Volume icons
+        this.load.image('volume-unmute', 'assets/volume-unmute.png');
+        this.load.image('volume-mute', 'assets/volume-mute.png');
     }
 
     create() {
