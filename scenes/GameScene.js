@@ -153,14 +153,14 @@ class GameScene extends Phaser.Scene {
             this.ball.setVelocity(-this.ballSpeed, 0);
             
             // PHASE 12: Add ball trail at higher speed (will be visible when speed increases)
-            this.ballTrail = this.add.particles(this.ball.x, this.ball.y, finalTexture, {
+            this.ballTrail = this.add.particles(0, 0, finalTexture, {
                 speed: 50,
                 scale: { start: 0.15, end: 0 },
                 alpha: { start: 0.5, end: 0 },
                 lifespan: 300,
-                frequency: 50,
-                follow: this.ball
+                frequency: 50
             });
+            this.ballTrail.startFollow(this.ball);
             this.ballTrail.setDepth(0);
             
             console.log('Ball created with texture:', finalTexture);
