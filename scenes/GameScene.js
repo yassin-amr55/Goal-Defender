@@ -525,20 +525,6 @@ class GameScene extends Phaser.Scene {
             
             this.ball.setVelocity(-this.ballSpeed, newVerticalVelocity);
             
-            // PHASE 12: Particles on wall bounce
-            const particles = this.add.particles(this.ball.x, this.ball.y, this.getBallTexture(), {
-                speed: { min: 100, max: 200 },
-                scale: { start: 0.15, end: 0 },
-                alpha: { start: 0.8, end: 0 },
-                lifespan: 400,
-                quantity: 10
-            });
-            
-            // Destroy particle emitter after particles are done
-            this.time.delayedCall(500, () => {
-                particles.destroy();
-            });
-            
             // PHASE 13: Bounce sound
             this.playBounceSound();
             
