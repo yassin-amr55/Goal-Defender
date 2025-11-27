@@ -251,10 +251,10 @@ class GameScene extends Phaser.Scene {
                 this.hitboxShrinkMultiplier = 0.85; // Shrinks 15% slower
                 break;
             case 'fire':
-                this.speedMultiplier = 0.9; // 10% slower
+                this.scoreMultiplier = 2; // +2 score per deflect
                 break;
             case 'steel':
-                this.scoreMultiplier = 2; // +2 score per deflect
+                this.speedMultiplier = 0.9; // 10% slower
                 break;
             case 'ghost':
                 this.minHitboxMultiplier = 1.2; // Min hitbox 120% of ball size
