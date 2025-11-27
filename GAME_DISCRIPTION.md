@@ -12,7 +12,7 @@ Your score increases each time you successfully "tap-deflect" the ball, and each
 
 ### 🎯 Field Layout
 
-- **Background:** A sky background image that fills the screen above the ground
+- **Background:** A stadium interior view that fills the screen above the ground
 - **Ground:** A 100px high ground texture at the bottom with decorative grass on top
 - **Left side:** Your goal (if the ball fully enters it, you lose)
 - **Right side:** A solid wall (ball bounces off it)
@@ -166,7 +166,7 @@ All data stored in localStorage:
 ### Visual Elements
 
 **Background:**
-- Sky background (alpha 0.7)
+- Stadium interior background (alpha 0.7)
 - Ground texture at bottom (alpha 0.5)
 - Decorative grass (alpha 0.4)
 
@@ -253,7 +253,7 @@ All data stored in localStorage:
 ### Display Elements
 
 **Background:**
-- Sky background (alpha 0.6)
+- Stadium interior background (alpha 0.6)
 - Ground and grass (alpha 0.5 and 0.4)
 
 **Title:**
@@ -409,7 +409,7 @@ All sounds generated using Web Audio API (no external files).
 5. GameOverScene - Results screen
 
 **Assets Loaded:**
-- background.png - Sky texture
+- background.png - Stadium interior texture
 - ground.png - Ground texture
 - grass.png - Decorative grass
 - ball.png - Default ball
