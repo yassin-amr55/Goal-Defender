@@ -78,8 +78,8 @@ class ShopScene extends Phaser.Scene {
         this.ballData = [
             { id: 'default', name: 'Default Ball', price: 0, ability: 'None', texture: 'ball_default' },
             { id: 'golden', name: 'Golden Ball', price: 50, ability: 'Hitbox shrinks 15% slower', texture: 'ball_golden' },
-            { id: 'fire', name: 'Fireball', price: 200, ability: '+2 score per deflect', texture: 'ball_fire' },
             { id: 'steel', name: 'Steel Ball', price: 100, ability: 'Ball moves 10% slower', texture: 'ball_steel' },
+            { id: 'fire', name: 'Fireball', price: 200, ability: '+2 score per deflect', texture: 'ball_fire' },
             { id: 'ghost', name: 'Ghost Ball', price: 350, ability: 'Min hitbox 120% of ball', texture: 'ball_ghost' },
             { id: 'spark', name: 'Spark Ball', price: 500, ability: '+5% extra score', texture: 'ball_spark' }
         ];
