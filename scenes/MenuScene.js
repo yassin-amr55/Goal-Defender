@@ -168,20 +168,13 @@ class MenuScene extends Phaser.Scene {
             this.scene.start('ShopScene');
         });
         
-        // Add bouncing floating ball animation with particle trail
-        if (this.textures.exists('ball_default')) {
-            this.floatingBall = this.add.image(200, 400, 'ball_default');
+        // Add bouncing floating ball animation using equipped ball
+        const equippedBall = localStorage.getItem('goalDefenderEquippedBall') || 'default';
+        const ballTexture = this.getBallTexture(equippedBall);
+        
+        if (this.textures.exists(ballTexture)) {
+            this.floatingBall = this.add.image(200, 400, ballTexture);
             this.floatingBall.setScale(0.3); // Adjusted for 512x512 image
-            
-            // Add particle trail to floating ball
-            this.floatingBallTrail = this.add.particles(0, 0, 'ball_default', {
-                speed: 30,
-                scale: { start: 0.2, end: 0 },
-                alpha: { start: 0.6, end: 0 },
-                lifespan: 500,
-                frequency: 80
-            });
-            this.floatingBallTrail.startFollow(this.floatingBall);
             
             // Bouncing animation
             this.tweens.add({
@@ -217,6 +210,18 @@ class MenuScene extends Phaser.Scene {
         this.createMuteButton();
 
         console.log('MenuScene loaded - Phase 8 complete');
+    }
+
+    getBallTexture(ballId) {
+        const textureMap = {
+            'default': 'ball_default',
+            'golden': 'ball_golden',
+            'fire': 'ball_fire',
+            'steel': 'ball_steel',
+            'ghost': 'ball_ghost',
+            'spark': 'ball_spark'
+        };
+        return textureMap[ballId] || 'ball_default';
     }
 
     createMuteButton() {
