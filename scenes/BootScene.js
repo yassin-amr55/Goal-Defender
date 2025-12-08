@@ -4,6 +4,14 @@ class BootScene extends Phaser.Scene {
     }
 
     preload() {
+        // Update loading progress
+        this.load.on('progress', (value) => {
+            const progressElement = document.getElementById('loading-progress');
+            if (progressElement) {
+                progressElement.textContent = Math.round(value * 100) + '%';
+            }
+        });
+
         // Add loading error handler
         this.load.on('loaderror', (file) => {
             console.error('Error loading file:', file.src);
@@ -33,9 +41,20 @@ class BootScene extends Phaser.Scene {
     }
 
     create() {
-        // Once assets are loaded, go to MenuScene
+        // Once assets are loaded, hide loading screen and go to MenuScene
         console.log('Assets loaded successfully!');
         console.log('Textures:', this.textures.list);
+        
+        // Hide loading screen with fade out effect
+        const loadingScreen = document.getElementById('loading-screen');
+        if (loadingScreen) {
+            loadingScreen.classList.add('hidden');
+            // Remove from DOM after transition
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+            }, 500);
+        }
+        
         this.scene.start('MenuScene');
     }
 }
