@@ -50,6 +50,23 @@
             width: 150px;
             height: 150px;
             margin-bottom: 20px;
+            animation: ballFloat 1.5s ease-in-out infinite, ballSpin 3s linear infinite;
+        }
+        @keyframes ballFloat {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-30px);
+            }
+        }
+        @keyframes ballSpin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
         }
         #loading-screen p {
             color: #ffffff;
@@ -64,7 +81,7 @@
 </head>
 <body>
     <div id="loading-screen">
-        <img src="assets/loading.gif" alt="Loading...">
+        <img src="assets/ball.png" alt="Loading...">
         <p>Loading Game...</p>
         <p id="loading-progress">0%</p>
     </div>
