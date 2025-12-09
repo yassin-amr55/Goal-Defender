@@ -94,13 +94,13 @@ class MenuScene extends Phaser.Scene {
             }
         }).setOrigin(0.5);
         
-        // PLAY button background
-        const playBg = this.add.rectangle(640, 420, 250, 80, 0x00aa00, 1);
+        // PLAY button background (repositioned left)
+        const playBg = this.add.rectangle(440, 420, 250, 80, 0x00aa00, 1);
         playBg.setStrokeStyle(4, 0x00ff00);
         playBg.setInteractive();
         
         // PLAY button text
-        const playButton = this.add.text(640, 420, 'PLAY', {
+        const playButton = this.add.text(440, 420, 'PLAY', {
             fontSize: '52px',
             fill: '#ffffff',
             fontStyle: 'bold',
@@ -131,13 +131,13 @@ class MenuScene extends Phaser.Scene {
             this.scene.start('GameScene');
         });
         
-        // SHOP button background
-        const shopBg = this.add.rectangle(640, 520, 250, 80, 0xcc6600, 1);
+        // SHOP button background (center)
+        const shopBg = this.add.rectangle(640, 420, 250, 80, 0xcc6600, 1);
         shopBg.setStrokeStyle(4, 0xffaa00);
         shopBg.setInteractive();
         
         // SHOP button text
-        const shopButton = this.add.text(640, 520, 'SHOP', {
+        const shopButton = this.add.text(640, 420, 'SHOP', {
             fontSize: '52px',
             fill: '#ffffff',
             fontStyle: 'bold',
@@ -166,6 +166,32 @@ class MenuScene extends Phaser.Scene {
         
         shopBg.on('pointerdown', () => {
             this.scene.start('ShopScene');
+        });
+        
+        // TOURNAMENT button background (right) - Cup icon only
+        const tournamentBg = this.add.rectangle(840, 420, 250, 80, 0x9933cc, 1);
+        tournamentBg.setStrokeStyle(4, 0xffcc00);
+        tournamentBg.setInteractive();
+        
+        // TOURNAMENT button - Trophy emoji (cup icon only)
+        const tournamentIcon = this.add.text(840, 420, '🏆', {
+            fontSize: '60px'
+        }).setOrigin(0.5);
+        
+        tournamentBg.on('pointerover', () => {
+            tournamentBg.setScale(1.05);
+            tournamentIcon.setScale(1.1);
+            tournamentBg.setFillStyle(0xbb55ee);
+        });
+        
+        tournamentBg.on('pointerout', () => {
+            tournamentBg.setScale(1);
+            tournamentIcon.setScale(1);
+            tournamentBg.setFillStyle(0x9933cc);
+        });
+        
+        tournamentBg.on('pointerdown', () => {
+            this.scene.start('TournamentMenuScene');
         });
         
         // Add bouncing floating ball animation using equipped ball
