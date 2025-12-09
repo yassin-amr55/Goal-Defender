@@ -418,15 +418,15 @@ class GameScene extends Phaser.Scene {
             console.log('Current velocity:', this.ball.body.velocity.x);
             
             // PHASE 6: Increase ball speed with dynamic rate
-            // After 150% boost, increase by 2% instead of 4%
+            // After 100% boost, increase by 2% instead of 4%
             // Max boost is 300%
             let increaseRate = 1.04; // 4% by default
             
             if (this.speedBoost >= 300) {
                 // Max boost reached, no more increase
                 increaseRate = 1.0;
-            } else if (this.speedBoost >= 150) {
-                // After 150%, increase by 2%
+            } else if (this.speedBoost >= 100) {
+                // After 100%, increase by 2%
                 increaseRate = 1.02;
             }
             
