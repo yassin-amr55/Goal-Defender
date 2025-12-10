@@ -94,13 +94,13 @@ class MenuScene extends Phaser.Scene {
             }
         }).setOrigin(0.5);
         
-        // PLAY button background (repositioned left)
-        const playBg = this.add.rectangle(440, 420, 250, 80, 0x00aa00, 1);
+        // PLAY button background (top in vertical stack)
+        const playBg = this.add.rectangle(640, 420, 250, 80, 0x00aa00, 1);
         playBg.setStrokeStyle(4, 0x00ff00);
         playBg.setInteractive();
         
         // PLAY button text
-        const playButton = this.add.text(440, 420, 'PLAY', {
+        const playButton = this.add.text(640, 420, 'PLAY', {
             fontSize: '52px',
             fill: '#ffffff',
             fontStyle: 'bold',
@@ -131,13 +131,13 @@ class MenuScene extends Phaser.Scene {
             this.scene.start('GameScene');
         });
         
-        // SHOP button background (center)
-        const shopBg = this.add.rectangle(640, 420, 250, 80, 0xcc6600, 1);
+        // SHOP button background (bottom in vertical stack)
+        const shopBg = this.add.rectangle(640, 520, 250, 80, 0xcc6600, 1);
         shopBg.setStrokeStyle(4, 0xffaa00);
         shopBg.setInteractive();
         
         // SHOP button text
-        const shopButton = this.add.text(640, 420, 'SHOP', {
+        const shopButton = this.add.text(640, 520, 'SHOP', {
             fontSize: '52px',
             fill: '#ffffff',
             fontStyle: 'bold',
@@ -168,26 +168,31 @@ class MenuScene extends Phaser.Scene {
             this.scene.start('ShopScene');
         });
         
-        // TOURNAMENT button background (right) - Cup icon only
-        const tournamentBg = this.add.rectangle(840, 420, 250, 80, 0x9933cc, 1);
-        tournamentBg.setStrokeStyle(4, 0xffcc00);
+        // TOURNAMENT button - Small circular button next to PLAY/SHOP (to the right at x=820)
+        const tournamentBg = this.add.circle(820, 470, 40, 0xb8860b, 1); // Dark golden background
+        tournamentBg.setStrokeStyle(4, 0xffd700); // Gold border
         tournamentBg.setInteractive();
         
-        // TOURNAMENT button - Trophy emoji (cup icon only)
-        const tournamentIcon = this.add.text(840, 420, '🏆', {
-            fontSize: '60px'
-        }).setOrigin(0.5);
+        // Add champions trophy image on the button
+        if (this.textures.exists('champions-trophy')) {
+            const trophyIcon = this.add.image(820, 470, 'champions-trophy');
+            trophyIcon.setScale(0.08); // Smaller size to fit in button
+            trophyIcon.setDepth(5);
+        } else {
+            // Fallback to emoji if image not available
+            const trophyEmoji = this.add.text(820, 470, '🏆', {
+                fontSize: '40px'
+            }).setOrigin(0.5).setDepth(5);
+        }
         
         tournamentBg.on('pointerover', () => {
-            tournamentBg.setScale(1.05);
-            tournamentIcon.setScale(1.1);
-            tournamentBg.setFillStyle(0xbb55ee);
+            tournamentBg.setScale(1.1);
+            tournamentBg.setFillStyle(0xdaa520); // Brighter gold on hover
         });
         
         tournamentBg.on('pointerout', () => {
             tournamentBg.setScale(1);
-            tournamentIcon.setScale(1);
-            tournamentBg.setFillStyle(0x9933cc);
+            tournamentBg.setFillStyle(0xb8860b); // Dark golden
         });
         
         tournamentBg.on('pointerdown', () => {

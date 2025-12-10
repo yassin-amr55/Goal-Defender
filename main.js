@@ -18,7 +18,7 @@ const config = {
             debug: false
         }
     },
-    scene: [BootScene, MenuScene, ShopScene, GameScene, GameOverScene, TournamentMenuScene]
+    scene: [BootScene, MenuScene, ShopScene, GameScene, GameOverScene, TournamentMenuScene, TrophyRoomScene, TournamentNameScene, TournamentBracketScene, TournamentGameScene, TournamentVictoryScene]
 };
 
 // Initialize the game

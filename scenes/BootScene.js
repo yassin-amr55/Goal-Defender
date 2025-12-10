@@ -38,6 +38,10 @@ class BootScene extends Phaser.Scene {
         // Volume icons
         this.load.image('volume-unmute', 'assets/volume-unmute.png');
         this.load.image('volume-mute', 'assets/volume-mute.png');
+        
+        // Tournament trophies
+        this.load.image('qualifiers-trophy', 'assets/qualifiers-trophie.png');
+        this.load.image('champions-trophy', 'assets/champions-trophie.png');
     }
 
     create() {
