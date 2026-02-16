@@ -157,6 +157,9 @@ class TournamentGameScene extends Phaser.Scene {
         this.totalDeflects = 0;
         this.requiredScore = this.getRequiredScore(this.mode, this.currentRound);
         this.gameOver = false;
+        
+        // Initialize pause flag
+        this.isPaused = false;
 
         // UI Text elements (same style as infinite mode)
         let roundName = this.currentRound;
@@ -234,6 +237,13 @@ class TournamentGameScene extends Phaser.Scene {
                 if (distance <= this.hitboxRadius && movingLeft && ballLeftOfMiddle) {
                     this.onBallClick();
                 }
+            }
+        });
+        
+        // Add ESC key listener for pause
+        this.input.keyboard.on('keydown-ESC', () => {
+            if (!this.gameOver) {
+                this.togglePause();
             }
         });
     }
@@ -440,6 +450,100 @@ class TournamentGameScene extends Phaser.Scene {
             this.totalDeflects++;
             
             console.log('Ball bounced back with velocity:', this.ball.body.velocity.x, this.ball.body.velocity.y);
+        }
+    }
+
+    togglePause() {
+        if (this.isPaused) {
+            // Resume game
+            this.resumeGame();
+        } else {
+            // Pause game
+            this.pauseGame();
+        }
+    }
+
+    pauseGame() {
+        this.isPaused = true;
+        this.physics.pause();
+        
+        // Create pause overlay
+        this.pauseOverlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.7);
+        this.pauseOverlay.setDepth(200);
+        
+        // Pause title
+        this.pauseTitle = this.add.text(640, 200, 'PAUSED', {
+            fontSize: '72px',
+            fill: '#ffffff',
+            fontStyle: 'bold',
+            stroke: '#000000',
+            strokeThickness: 6
+        }).setOrigin(0.5).setDepth(201);
+        
+        // Continue button
+        const continueBg = this.add.rectangle(640, 320, 300, 70, 0x00aa00, 1);
+        continueBg.setStrokeStyle(4, 0x00ff00);
+        continueBg.setInteractive();
+        continueBg.setDepth(201);
+        
+        const continueText = this.add.text(640, 320, 'CONTINUE', {
+            fontSize: '32px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(201);
+        
+        continueBg.on('pointerover', () => {
+            continueBg.setScale(1.05);
+            continueText.setScale(1.05);
+        });
+        
+        continueBg.on('pointerout', () => {
+            continueBg.setScale(1);
+            continueText.setScale(1);
+        });
+        
+        continueBg.on('pointerdown', () => {
+            this.resumeGame();
+        });
+        
+        // Menu button
+        const menuBg = this.add.rectangle(640, 420, 300, 70, 0xcc6600, 1);
+        menuBg.setStrokeStyle(4, 0xff9900);
+        menuBg.setInteractive();
+        menuBg.setDepth(201);
+        
+        const menuText = this.add.text(640, 420, 'MENU', {
+            fontSize: '32px',
+            fill: '#ffffff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(201);
+        
+        menuBg.on('pointerover', () => {
+            menuBg.setScale(1.05);
+            menuText.setScale(1.05);
+        });
+        
+        menuBg.on('pointerout', () => {
+            menuBg.setScale(1);
+            menuText.setScale(1);
+        });
+        
+        menuBg.on('pointerdown', () => {
+            this.scene.start('TournamentMenuScene');
+        });
+        
+        // Store pause menu elements for cleanup
+        this.pauseMenuElements = [this.pauseOverlay, this.pauseTitle, continueBg, continueText, menuBg, menuText];
+    }
+
+    resumeGame() {
+        this.isPaused = false;
+        this.physics.resume();
+        
+        // Remove pause menu elements
+        if (this.pauseMenuElements) {
+            this.pauseMenuElements.forEach(element => element.destroy());
+            this.pauseMenuElements = null;
         }
     }
 
