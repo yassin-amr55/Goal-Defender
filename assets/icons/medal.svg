@@ -1,27 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
-    <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#5aa9e6"/>
-      <stop offset="100%" stop-color="#2f6b9c"/>
-    </linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffe08a"/>
+      <stop offset="0%" stop-color="#ffe9a3"/>
       <stop offset="45%" stop-color="#f0b429"/>
-      <stop offset="100%" stop-color="#c98a08"/>
+      <stop offset="100%" stop-color="#b87c05"/>
     </linearGradient>
   </defs>
 
-  <!-- ribbon tails -->
-  <path d="M44 62 L34 112 L50 112 L56 88 L62 112 L78 112 L68 62 Z" fill="url(#ribbon)"/>
-  <path d="M44 62 L34 112 L42 112 L50 70 Z" fill="#ffffff" opacity="0.25"/>
+  <!-- Rosette petals, 12 evenly spaced around (64,64). Fully symmetric so the
+       artwork's centre of mass lands exactly on the centre of the 128x128 box.
+       A hanging ribbon was tried first and pulled the icon visibly off-centre
+       inside the round button. -->
+  <g fill="url(#gold)">
+    <circle cx="110"   cy="64"   r="16"/>
+    <circle cx="103.8" cy="87"   r="16"/>
+    <circle cx="87"    cy="103.8" r="16"/>
+    <circle cx="64"    cy="110"  r="16"/>
+    <circle cx="41"    cy="103.8" r="16"/>
+    <circle cx="24.2"  cy="87"   r="16"/>
+    <circle cx="18"    cy="64"   r="16"/>
+    <circle cx="24.2"  cy="41"   r="16"/>
+    <circle cx="41"    cy="24.2" r="16"/>
+    <circle cx="64"    cy="18"   r="16"/>
+    <circle cx="87"    cy="24.2" r="16"/>
+    <circle cx="103.8" cy="41"   r="16"/>
+  </g>
 
-  <!-- medal disc -->
-  <circle cx="56" cy="52" r="34" fill="#7a5a12" opacity="0.35"/>
-  <circle cx="56" cy="48" r="34" fill="url(#gold)"/>
-  <circle cx="56" cy="48" r="27" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.55"/>
-  <circle cx="56" cy="48" r="21" fill="none" stroke="#8a5f04" stroke-width="2" opacity="0.5"/>
+  <!-- medal face -->
+  <circle cx="64" cy="64" r="44" fill="url(#gold)"/>
+  <circle cx="64" cy="64" r="44" fill="none" stroke="#8a5f04" stroke-width="2" opacity="0.45"/>
+  <circle cx="64" cy="64" r="35" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.5"/>
 
   <!-- star -->
-  <path d="M56 32 L61.4 43.4 L73.8 45.2 L64.6 54.1 L66.6 66.4 L56 60.5 L45.4 66.4 L47.4 54.1 L38.2 45.2 L50.6 43.4 Z"
-        fill="#ffffff" opacity="0.92"/>
+  <path d="M64 42 L69.3 56.7 L84.9 57.2 L72.6 66.8 L76.9 81.8 L64 73
+           L51.1 81.8 L55.4 66.8 L43.1 57.2 L58.7 56.7 Z"
+        fill="#ffffff" opacity="0.95"/>
 </svg>
