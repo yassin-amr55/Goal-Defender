@@ -34,6 +34,13 @@ class BootScene extends Phaser.Scene {
         this.load.image('ball_steel', 'assets/balls/ball-steel.png');
         this.load.image('ball_ghost', 'assets/balls/ball-ghost.png');
         this.load.image('ball_spark', 'assets/balls/ball-spark.png');
+        this.load.image('ball_rubber', 'assets/balls/ball-rubber.png');
+        this.load.image('ball_ice', 'assets/balls/ball-ice.png');
+        this.load.image('ball_anchor', 'assets/balls/ball-anchor.png');
+        this.load.image('ball_neon', 'assets/balls/ball-neon.png');
+        this.load.image('ball_candy', 'assets/balls/ball-candy.png');
+        this.load.image('ball_void', 'assets/balls/ball-void.png');
+        this.load.image('ball_gauntlet', 'assets/balls/ball-gauntlet.png');
         
         // Volume icons
         this.load.image('volume-unmute', 'assets/volume-unmute.png');
@@ -42,6 +49,13 @@ class BootScene extends Phaser.Scene {
         // Tournament trophies
         this.load.image('qualifiers-trophy', 'assets/qualifiers-trophie.png');
         this.load.image('champions-trophy', 'assets/champions-trophie.png');
+
+        // Vector icons (replaces the old emoji)
+        this.load.svg('trophy-icon', 'assets/icons/trophy.svg', { width: 128, height: 128 });
+        this.load.svg('lock-icon', 'assets/icons/lock.svg', { width: 128, height: 128 });
+        this.load.svg('settings-icon', 'assets/icons/settings.svg', { width: 128, height: 128 });
+        this.load.svg('medal-icon', 'assets/icons/medal.svg', { width: 128, height: 128 });
+        this.load.svg('pause-icon', 'assets/icons/pause.svg', { width: 128, height: 128 });
     }
 
     create() {

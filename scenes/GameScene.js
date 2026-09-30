@@ -1,6 +1,8 @@
-class GameScene extends Phaser.Scene {
-    constructor() {
-        super({ key: 'GameScene' });
+﻿class GameScene extends Phaser.Scene {
+    // Accepts a key so TutorialScene can inherit the exact same physics
+    // instead of re-implementing (and drifting from) it.
+    constructor(key) {
+        super({ key: key || 'GameScene' });
     }
 
     create() {
@@ -90,24 +92,44 @@ class GameScene extends Phaser.Scene {
         console.log('Hitbox added with radius:', this.hitboxRadius, 'Will shrink every 20 seconds');
         
         // PHASE 4 & 5: Add global click handler to check distance from ball
+        //
+        // The hit test accepts where the ball has been over the last few
+        // frames, not only where it is right now. A tap on a phone always
+        // lands a little after the player saw the ball, and by then the ball
+        // has moved on - so a strict "where is it now" test makes a fast ball
+        // feel like it is ignoring you. That history window is what removes the
+        // perceived input lag.
+        this.ballHistory = [];
+        this.HISTORY_FRAMES = 10;
+
         this.input.on('pointerdown', (pointer) => {
-            console.log('Click detected at:', pointer.x, pointer.y);
-            if (this.ball) {
-                const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.ball.x, this.ball.y);
-                
-                // PHASE 5: Only clickable when ball is left of middle line
-                const ballLeftOfMiddle = this.ball.x < 640;
-                
-                // Only clickable when ball is moving toward goal (left)
-                const movingLeft = this.ball.body.velocity.x < 0;
-                
-                console.log('Distance:', distance, 'Hitbox:', this.hitboxRadius, 'Left of middle:', ballLeftOfMiddle, 'Moving left:', movingLeft);
-                
-                if (distance <= this.hitboxRadius && movingLeft && ballLeftOfMiddle) {
-                    console.log('Click within hitbox, ball moving left and left of middle!');
-                    this.onBallClick();
+            if (!this.ball) return;
+
+            // PHASE 5: Only clickable when ball is left of middle line
+            const ballLeftOfMiddle = this.ball.x < 640;
+
+            // Only clickable when ball is moving toward goal (left)
+            const movingLeft = this.ball.body.velocity.x < 0;
+            if (!movingLeft || !ballLeftOfMiddle) return;
+
+            const r = this.hitboxRadius;
+
+            // 1) Where the ball is now
+            let hit = Phaser.Math.Distance.Between(
+                pointer.x, pointer.y, this.ball.x, this.ball.y) <= r;
+
+            // 2) Where it has just been
+            if (!hit) {
+                for (let i = this.ballHistory.length - 1; i >= 0; i--) {
+                    const h = this.ballHistory[i];
+                    if (Phaser.Math.Distance.Between(pointer.x, pointer.y, h.x, h.y) <= r) {
+                        hit = true;
+                        break;
+                    }
                 }
             }
+
+            if (hit) this.onBallClick();
         });
 
         // Place the goal sprite on the left (directly on top of ground)
@@ -153,22 +175,31 @@ class GameScene extends Phaser.Scene {
             this.ball.setVelocity(-this.ballSpeed, 0);
             
             // PHASE 12: Add ball trail at higher speed (will be visible when speed increases)
-            this.ballTrail = this.add.particles(0, 0, finalTexture, {
-                speed: 50,
-                scale: { start: 0.15, end: 0 },
-                alpha: { start: 0.5, end: 0 },
-                lifespan: 300,
-                frequency: 50
-            });
-            this.ballTrail.startFollow(this.ball);
-            this.ballTrail.setDepth(0);
+            this.ballTrail = null; // clear any reference from a previous run
+            if (!window.Settings || window.Settings.isOn('gdParticles')) {
+                this.ballTrail = this.add.particles(0, 0, finalTexture, {
+                    speed: 50,
+                    scale: { start: 0.15, end: 0 },
+                    alpha: { start: 0.5, end: 0 },
+                    lifespan: 300,
+                    frequency: 50
+                });
+                this.ballTrail.startFollow(this.ball);
+                this.ballTrail.setDepth(0);
+            }
             
             console.log('Ball created with texture:', finalTexture);
             console.log('Equipped ball:', this.equippedBall);
             
             // Set minimum hitbox size to ball size (affected by ball ability)
             this.minHitboxRadius = (this.ball.displayWidth / 2) * this.minHitboxMultiplier;
-            
+
+            // Void Ball starts with the hitbox already fully shrunk
+            if (this.startHitboxMin) {
+                this.hitboxRadius = this.minHitboxRadius;
+                this.hitboxShrinkAmount = 0;   // nowhere left to shrink to
+            }
+
             console.log('Ball added at position:', this.ball.x, this.ball.y);
             console.log('Ball display size:', this.ball.displayWidth, this.ball.displayHeight);
             console.log('Min hitbox radius set to ball radius:', this.minHitboxRadius);
@@ -200,29 +231,37 @@ class GameScene extends Phaser.Scene {
 
         // Add score text UI (temporary)
         this.score = 0;
-        this.scoreText = this.add.text(20, 20, 'Score: 0', {
+
+        // Lifetime total of deflections, used for future achievements.
+        // This run's deflections are the same count as this.score.
+        this.runDeflections = 0;
+        this.lifetimeDeflections = parseInt(localStorage.getItem('goalDefenderDeflections') || '0');
+
+        // HUD: three independent readouts, no backing panel. Each keeps a dark
+        // stroke so it stays readable over the stadium art.
+        this.scoreText = this.add.text(22, 22, 'Score: 0', {
             fontSize: '32px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
+            color: '#ffffff',
+            fontStyle: '900',
             stroke: '#000000',
             strokeThickness: 4
         });
 
         // Add countdown text for hitbox shrinking
-        this.countdownText = this.add.text(20, 60, 'Hitbox shrinks in: 10s', {
+        this.countdownText = this.add.text(22, 64, 'Hitbox shrinks in: 10s', {
             fontSize: '24px',
-            fill: '#ffff00',
-            fontStyle: 'bold',
+            color: '#ffd45e',
+            fontStyle: '800',
             stroke: '#000000',
             strokeThickness: 3
         });
 
         // Add speed boost text
         this.speedBoost = 0; // Track total speed boost percentage
-        this.speedText = this.add.text(20, 95, 'Speed Boost: 0%', {
+        this.speedText = this.add.text(22, 98, 'Speed Boost: 0%', {
             fontSize: '24px',
-            fill: '#00ff00',
-            fontStyle: 'bold',
+            color: '#3ddc6b',
+            fontStyle: '800',
             stroke: '#000000',
             strokeThickness: 3
         });
@@ -255,26 +294,64 @@ class GameScene extends Phaser.Scene {
         this.hitboxShrinkMultiplier = 1.0;
         this.scoreMultiplier = 1;
         this.minHitboxMultiplier = 1.0;
-        
+        this.maxSpeedBoost = 300; // Speed boost ceiling (%)
+        this.jumpMultiplier = 1.0; // Ground bounce height
+        // How fast the speed boost percentage climbs. The second value is
+        // used once the boost is already past 100%.
+        this.boostStepMain = 1.04;
+        this.boostStepLate = 1.02;
+        this.startHitboxMin = false; // Start with the hitbox already minimum
+
         switch(this.equippedBall) {
             case 'golden':
                 this.hitboxShrinkMultiplier = 0.85; // Shrinks 15% slower
                 break;
-            case 'fire':
-                this.scoreMultiplier = 2; // +2 score per deflect
-                break;
             case 'steel':
                 this.speedMultiplier = 0.9; // 10% slower
                 break;
+            case 'fire':
+                this.scoreMultiplier = 2; // +2 score per deflect
+                break;
             case 'ghost':
-                this.minHitboxMultiplier = 1.2; // Min hitbox 120% of ball size
+                this.minHitboxMultiplier = 1.3; // Min hitbox 130% of ball size
                 break;
             case 'spark':
-                this.scoreMultiplier = 1.05; // +5% extra score
+                this.maxSpeedBoost = 210; // Speed tops out at 210%
+                break;
+            case 'rubber':
+                this.jumpMultiplier = 1.25; // Bounces 25% higher off the ground
+                break;
+            case 'ice':
+                this.hitboxShrinkMultiplier = 0.5; // Shrinks 50% slower
+                break;
+            case 'anchor':
+                // Base speed is half, so the same boost percentage takes much
+                // longer to build in real time. The 300% ceiling is unchanged.
+                this.speedMultiplier = 0.5;
+                break;
+            case 'neon':
+                this.boostStepMain = 1.08; // +8% per hit
+                this.boostStepLate = 1.04; // +4% past 100%
+                break;
+            case 'candy':
+                this.scoreMultiplier = 3; // +3 score per deflect
+                break;
+            case 'void':
+                // Brutal from the first hit, but the ball never gets quick
+                this.startHitboxMin = true;
+                this.maxSpeedBoost = 170;
+                this.boostStepMain = 1.02;
+                this.boostStepLate = 1.01;
+                break;
+            case 'gauntlet':
+                // Easy to hit and scores hugely, but can never go fast
+                this.minHitboxMultiplier = 1.7; // Hitbox 170% of ball size
+                this.maxSpeedBoost = 100;
+                this.scoreMultiplier = 5; // +5 score per deflect
                 break;
         }
-        
-        console.log('Ball abilities loaded:', this.equippedBall);
+
+        console.log('Ball abilities loaded:', this.equippedBall, 'maxSpeedBoost:', this.maxSpeedBoost + '%');
     }
 
     getBallTexture() {
@@ -284,7 +361,14 @@ class GameScene extends Phaser.Scene {
             'fire': 'ball_fire',
             'steel': 'ball_steel',
             'ghost': 'ball_ghost',
-            'spark': 'ball_spark'
+            'spark': 'ball_spark',
+            'rubber': 'ball_rubber',
+            'ice': 'ball_ice',
+            'anchor': 'ball_anchor',
+            'neon': 'ball_neon',
+            'candy': 'ball_candy',
+            'void': 'ball_void',
+            'gauntlet': 'ball_gauntlet'
         };
         return textureMap[this.equippedBall] || 'ball_default';
     }
@@ -295,28 +379,9 @@ class GameScene extends Phaser.Scene {
     }
 
     createMuteButton() {
-        const x = 1230;
-        const y = 30;
-        
-        // Create the mute button sprite
-        this.muteButton = this.add.image(x, y, isMuted ? 'volume-mute' : 'volume-unmute');
-        this.muteButton.setScale(0.08);
-        this.muteButton.setDepth(100);
-        this.muteButton.setInteractive();
-
-        this.muteButton.on('pointerover', () => {
-            this.muteButton.setScale(0.1);
-        });
-
-        this.muteButton.on('pointerout', () => {
-            this.muteButton.setScale(0.08);
-        });
-
-        this.muteButton.on('pointerdown', () => {
-            isMuted = !isMuted;
-            localStorage.setItem('goalDefenderMuted', isMuted);
-            this.muteButton.setTexture(isMuted ? 'volume-mute' : 'volume-unmute');
-        });
+        // Pause button is essential on a phone, where there is no ESC key.
+        // Mute sits to its left.
+        UI.topRight(this, { onPause: () => this.togglePause() });
     }
 
     playClickSound() {
@@ -399,14 +464,16 @@ class GameScene extends Phaser.Scene {
         this.playExplosionSound();
         
         // Create particle explosion at ball position
-        const particles = this.add.particles(this.ball.x, this.ball.y, 'ball_default', {
-            speed: { min: 100, max: 300 },
-            scale: { start: 0.3, end: 0 },
-            alpha: { start: 1, end: 0 },
-            lifespan: 800,
-            quantity: 20,
-            blendMode: 'ADD'
-        });
+        if (!window.Settings || window.Settings.isOn('gdParticles')) {
+            this.add.particles(this.ball.x, this.ball.y, 'ball_default', {
+                speed: { min: 100, max: 300 },
+                scale: { start: 0.3, end: 0 },
+                alpha: { start: 1, end: 0 },
+                lifespan: 800,
+                quantity: 20,
+                blendMode: 'ADD'
+            });
+        }
         
         // Stop ball movement
         this.ball.setVelocity(0, 0);
@@ -417,7 +484,10 @@ class GameScene extends Phaser.Scene {
         
         // Move to GameOverScene after fade
         this.cameras.main.once('camerafadeoutcomplete', () => {
-            this.scene.start('GameOverScene', { score: this.score });
+            this.scene.start('GameOverScene', {
+                score: this.score,
+                deflections: this.runDeflections
+            });
         });
     }
 
@@ -428,19 +498,19 @@ class GameScene extends Phaser.Scene {
             console.log('Current velocity:', this.ball.body.velocity.x);
             
             // PHASE 6: Increase ball speed with dynamic rate
-            // After 100% boost, increase by 2% instead of 4%
-            // Max boost is 300%
-            let increaseRate = 1.04; // 4% by default
-            
-            if (this.speedBoost >= 300) {
+            // Past 100% the step gets smaller. Both the step size and the
+            // ceiling are per-ball (Neon steps faster, Spark tops out lower).
+            const maxBoost = this.maxSpeedBoost;
+            let increaseRate = this.boostStepMain;
+
+            if (this.speedBoost >= maxBoost) {
                 // Max boost reached, no more increase
                 increaseRate = 1.0;
             } else if (this.speedBoost >= 100) {
-                // After 100%, increase by 2%
-                increaseRate = 1.02;
+                increaseRate = this.boostStepLate;
             }
             
-            if (this.speedBoost < 300) {
+            if (this.speedBoost < maxBoost) {
                 this.ballSpeed = this.ballSpeed * increaseRate;
                 const boostAmount = (increaseRate - 1) * 100;
                 this.speedBoost += boostAmount; // Track cumulative boost
@@ -448,9 +518,9 @@ class GameScene extends Phaser.Scene {
                 // Round to avoid floating point precision issues
                 this.speedBoost = Math.round(this.speedBoost * 100) / 100;
                 
-                // Cap at 300%
-                if (this.speedBoost > 300) {
-                    this.speedBoost = 300;
+                // Cap at this ball's ceiling
+                if (this.speedBoost > maxBoost) {
+                    this.speedBoost = maxBoost;
                 }
             }
             
@@ -466,11 +536,26 @@ class GameScene extends Phaser.Scene {
             // Add score (affected by ball ability)
             const scoreGain = Math.round(this.scoreMultiplier);
             this.score += scoreGain;
+
+            // Deflections are 1 per successful click, tracked separately so
+            // achievements can use them even if ball score multipliers change.
+            this.runDeflections++;
+            this.lifetimeDeflections++;
+            localStorage.setItem('goalDefenderDeflections', this.lifetimeDeflections);
+
             this.scoreText.setText('Score: ' + this.score);
             this.speedText.setText('Speed Boost: ' + this.speedBoost + '%');
-            
+
+            // Feed the achievement system, which may unlock and pay out here
+            if (window.Achievements) {
+                window.Achievements.setMaxSpeed(this.speedBoost);
+                window.Achievements.check(this);
+            }
+
             // PHASE 12: Screen shake on click
-            this.cameras.main.shake(100, 0.005);
+            if (window.Settings && window.Settings.isOn('gdShake')) {
+                this.cameras.main.shake(100, 0.005);
+            }
             
             // PHASE 12: Flash effect when score increments
             this.scoreText.setScale(1.3);
@@ -547,8 +632,9 @@ class GameScene extends Phaser.Scene {
         if (this.ball && this.ball.body.touching.down) {
             // Only bounce if ball is touching ground from above
             
-            // Fixed jump velocity to reach approximately goal height
-            const jumpVelocity = -400;
+            // Fixed jump velocity to reach approximately goal height.
+            // Rubber Ball bounces 25% higher.
+            const jumpVelocity = -400 * (this.jumpMultiplier || 1);
             
             // Keep horizontal velocity constant
             const horizontalVelocity = this.ball.body.velocity.x > 0 ? this.ballSpeed : -this.ballSpeed;
@@ -574,88 +660,78 @@ class GameScene extends Phaser.Scene {
     pauseGame() {
         this.isPaused = true;
         this.physics.pause();
-        
-        // Create pause overlay
-        this.pauseOverlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.7);
-        this.pauseOverlay.setDepth(200);
-        
-        // Pause title
-        this.pauseTitle = this.add.text(640, 200, 'PAUSED', {
-            fontSize: '72px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 6
-        }).setOrigin(0.5).setDepth(201);
-        
-        // Continue button
-        const continueBg = this.add.rectangle(640, 320, 300, 70, 0x00aa00, 1);
-        continueBg.setStrokeStyle(4, 0x00ff00);
-        continueBg.setInteractive();
-        continueBg.setDepth(201);
-        
-        const continueText = this.add.text(640, 320, 'CONTINUE', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(201);
-        
-        continueBg.on('pointerover', () => {
-            continueBg.setScale(1.05);
-            continueText.setScale(1.05);
+
+        this.pauseMenuElements = [];
+
+        // Dim the whole screen
+        const overlay = this.add.rectangle(640, 360, 1280, 720, 0x050a12, 0.78);
+        overlay.setDepth(200);
+        this.pauseMenuElements.push(overlay);
+
+        const card = UI.panel(this, {
+            x: 640, y: 360, w: 480, h: 380, radius: 24,
+            fillTop: 0x1f2c3d, fillBottom: 0x121c28,
+            border: 0x4a6a8a, borderWidth: 2, depth: 201
         });
-        
-        continueBg.on('pointerout', () => {
-            continueBg.setScale(1);
-            continueText.setScale(1);
+        this.pauseMenuElements.push(card);
+
+        const title = this.add.text(640, 236, 'PAUSED', {
+            fontSize: '52px',
+            color: '#ffffff',
+            fontStyle: '900',
+            stroke: '#f0a500',
+            strokeThickness: 5
+        }).setOrigin(0.5).setDepth(202);
+        this.pauseMenuElements.push(title);
+
+        const cont = UI.button(this, {
+            x: 640, y: 340, w: 300, h: 74,
+            label: 'CONTINUE',
+            textSize: 26,
+            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
+            depth: 202,
+            onClick: () => this.resumeGame()
         });
-        
-        continueBg.on('pointerdown', () => {
-            this.resumeGame();
+        this.pauseMenuElements.push(cont);
+
+        const menu = UI.button(this, {
+            x: 640, y: 434, w: 300, h: 74,
+            label: 'MAIN MENU',
+            textSize: 26,
+            fillTop: 0xffb340, fillBottom: 0xf08a1d,
+            depth: 202,
+            onClick: () => this.scene.start('MenuScene')
         });
-        
-        // Menu button
-        const menuBg = this.add.rectangle(640, 420, 300, 70, 0xcc6600, 1);
-        menuBg.setStrokeStyle(4, 0xff9900);
-        menuBg.setInteractive();
-        menuBg.setDepth(201);
-        
-        const menuText = this.add.text(640, 420, 'MENU', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(201);
-        
-        menuBg.on('pointerover', () => {
-            menuBg.setScale(1.05);
-            menuText.setScale(1.05);
-        });
-        
-        menuBg.on('pointerout', () => {
-            menuBg.setScale(1);
-            menuText.setScale(1);
-        });
-        
-        menuBg.on('pointerdown', () => {
-            this.scene.start('MenuScene');
-        });
-        
-        // Store pause menu elements for cleanup
-        this.pauseMenuElements = [this.pauseOverlay, this.pauseTitle, continueBg, continueText, menuBg, menuText];
+        this.pauseMenuElements.push(menu);
+
+        this.pauseOverlay = overlay;
+        this.pauseTitle = title;
     }
 
     resumeGame() {
         this.isPaused = false;
         this.physics.resume();
-        
-        // Remove pause menu elements
+
+        // Remove pause menu elements (UI.button returns a Container, and
+        // destroy() on a Container removes its children too)
         if (this.pauseMenuElements) {
             this.pauseMenuElements.forEach(element => element.destroy());
             this.pauseMenuElements = null;
         }
+        this.pauseOverlay = null;
+        this.pauseTitle = null;
     }
 
     update() {
+        // Remember where the ball has just been, so a tap arriving a few
+        // frames after the player saw it still counts as a hit.
+        if (this.ball) {
+            this.ballHistory.push({ x: this.ball.x, y: this.ball.y });
+            while (this.ballHistory.length > (this.HISTORY_FRAMES || 10)) {
+                this.ballHistory.shift();
+            }
+        }
+
         // Update countdown text
         if (this.countdownText) {
             if (this.hitboxRadius <= this.minHitboxRadius) {
@@ -675,10 +751,11 @@ class GameScene extends Phaser.Scene {
             
             // Only show hitbox when ball is moving left (toward goal) and left of middle
             const ballLeftOfMiddle = this.ball.x < 640;
+            const alwaysOn = window.Settings && window.Settings.isOn('gdHitboxAlways');
             if (this.ball.body.velocity.x < 0 && ballLeftOfMiddle) {
                 this.hitboxCircle.setAlpha(0.3);
             } else {
-                this.hitboxCircle.setAlpha(0.1); // Dim when not clickable
+                this.hitboxCircle.setAlpha(alwaysOn ? 0.25 : 0.1); // Dim when not clickable
             }
         }
 

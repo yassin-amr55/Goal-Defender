@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="gear" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8eef5"/>
+      <stop offset="50%" stop-color="#aab5c1"/>
+      <stop offset="100%" stop-color="#7b8794"/>
+    </linearGradient>
+  </defs>
+
+  <g fill="none" stroke-linejoin="round">
+    <!-- teeth -->
+    <path d="M64 12 L64 26 M64 102 L64 116 M12 64 L26 64 M102 64 L116 64
+             M27 27 L37 37 M91 91 L101 101 M101 27 L91 37 M37 91 L27 101"
+          stroke="#1a1a1a" stroke-width="17" stroke-linecap="round"/>
+    <path d="M64 12 L64 26 M64 102 L64 116 M12 64 L26 64 M102 64 L116 64
+             M27 27 L37 37 M91 91 L101 101 M101 27 L91 37 M37 91 L27 101"
+          stroke="url(#gear)" stroke-width="9" stroke-linecap="round"/>
+
+    <!-- ring -->
+    <circle cx="64" cy="64" r="38" stroke="#1a1a1a" stroke-width="17"/>
+    <circle cx="64" cy="64" r="38" stroke="url(#gear)" stroke-width="10"/>
+  </g>
+
+  <!-- hub -->
+  <circle cx="64" cy="64" r="20" fill="#1a1a1a"/>
+  <circle cx="64" cy="64" r="14" fill="#5c6875"/>
+  <circle cx="64" cy="64" r="14" fill="url(#gear)"/>
+  <circle cx="59" cy="58" r="5" fill="#ffffff" opacity="0.45"/>
+</svg>

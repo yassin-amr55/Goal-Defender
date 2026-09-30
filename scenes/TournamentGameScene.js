@@ -1,4 +1,4 @@
-class TournamentGameScene extends Phaser.Scene {
+﻿class TournamentGameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'TournamentGameScene' });
     }
@@ -7,6 +7,10 @@ class TournamentGameScene extends Phaser.Scene {
         this.mode = data.mode || localStorage.getItem('tournamentMode') || 'qualifiers';
         this.currentRound = data.round || localStorage.getItem('tournamentRound') || (this.mode === 'qualifiers' ? 'roundOf16' : 'roundOf32');
         this.opponent = data.opponent || data.opponentName || 'Opponent';
+
+        // Remember whether the Champions Cup was ever won, so a later defeat
+        // does not revoke it.
+        this.everWonChampions = localStorage.getItem('tournamentChampionsWon') === 'true';
         
         // Save tournament state
         localStorage.setItem('tournamentActive', 'true');
@@ -88,8 +92,11 @@ class TournamentGameScene extends Phaser.Scene {
             this.leftGoal.setDepth(10);
         }
 
-        // Ball setup - Tournament always uses default ball.png
-        const finalTexture = 'ball_default';
+        // Ball setup - tournaments use the equipped skin for looks only.
+        // loadBallAbilities() above has already zeroed every ability, so this
+        // is the normal ball in whatever outfit the player picked.
+        const ballTexture = this.getBallTexture();
+        const finalTexture = this.textures.exists(ballTexture) ? ballTexture : 'ball_default';
 
         const ballStartY = 400;
         this.ball = this.physics.add.sprite(640, ballStartY, finalTexture);
@@ -106,15 +113,17 @@ class TournamentGameScene extends Phaser.Scene {
         this.ball.setVelocity(this.ballSpeed * dirRandom, 0);
 
         // Ball trail
-        this.ballTrail = this.add.particles(0, 0, finalTexture, {
-            speed: 50,
-            scale: { start: 0.15, end: 0 },
-            alpha: { start: 0.5, end: 0 },
-            lifespan: 300,
-            frequency: 50
-        });
-        this.ballTrail.startFollow(this.ball);
-        this.ballTrail.setDepth(0);
+        if (!window.Settings || window.Settings.isOn('gdParticles')) {
+            this.ballTrail = this.add.particles(0, 0, finalTexture, {
+                speed: 50,
+                scale: { start: 0.15, end: 0 },
+                alpha: { start: 0.5, end: 0 },
+                lifespan: 300,
+                frequency: 50
+            });
+            this.ballTrail.startFollow(this.ball);
+            this.ballTrail.setDepth(0);
+        }
 
         this.minHitboxRadius = (this.ball.displayWidth / 2) * this.minHitboxMultiplier;
 
@@ -170,51 +179,51 @@ class TournamentGameScene extends Phaser.Scene {
         else if (roundName === 'semiFinals') roundName = 'SEMI FINALS';
         else if (roundName === 'finals') roundName = 'FINALS';
         
-        this.add.text(640, 30, roundName, { 
-            fontSize: '28px', 
-            fill: '#ffffff',
-            fontStyle: 'bold',
+        // HUD: independent readouts, no backing panels
+        this.add.text(640, 30, roundName, {
+            fontSize: '24px',
+            color: '#ffffff',
+            fontStyle: '900',
             stroke: '#000000',
             strokeThickness: 4
         }).setOrigin(0.5);
-        
+
         const teamName = localStorage.getItem('tournamentTeamName') || 'Your Team';
         const matchupText = `${teamName} vs ${this.opponent}`;
-        this.add.text(640, 60, matchupText, { 
-            fontSize: '20px', 
-            fill: '#ffff00',
-            fontStyle: 'bold',
+        this.add.text(640, 62, matchupText, {
+            fontSize: '17px',
+            color: '#ffd45e',
+            fontStyle: '800',
             stroke: '#000000',
             strokeThickness: 3
         }).setOrigin(0.5);
 
-        // Move score text left to avoid mute button overlap
-        this.scoreText = this.add.text(1050, 30, `Score: ${this.score} / ${this.requiredScore}`, { 
-            fontSize: '24px', 
-            fill: '#ffffff',
-            fontStyle: 'bold',
+        // Score sits right of centre, clear of the top-right control cluster
+        this.scoreText = this.add.text(1050, 30, `Score: ${this.score} / ${this.requiredScore}`, {
+            fontSize: '24px',
+            color: '#ffffff',
+            fontStyle: '900',
             stroke: '#000000',
             strokeThickness: 4
         }).setOrigin(0.5);
-        
+
         // Speed boost text (same style as infinite mode)
-        this.speedBoostText = this.add.text(20, 95, `Speed Boost: 0%`, { 
-            fontSize: '24px', 
-            fill: '#00ff00',
-            fontStyle: 'bold',
+        this.speedBoostText = this.add.text(22, 98, `Speed Boost: 0%`, {
+            fontSize: '24px',
+            color: '#3ddc6b',
+            fontStyle: '800',
             stroke: '#000000',
             strokeThickness: 3
         });
-        
+
         // Hitbox countdown text (same style as infinite mode)
-        this.hitboxCountdownText = this.add.text(20, 60, `Hitbox shrinks in: ${this.shrinkCountdown}s`, { 
-            fontSize: '24px', 
-            fill: '#ffff00',
-            fontStyle: 'bold',
+        this.hitboxCountdownText = this.add.text(22, 64, `Hitbox shrinks in: ${this.shrinkCountdown}s`, {
+            fontSize: '24px',
+            color: '#ffd45e',
+            fontStyle: '800',
             stroke: '#000000',
             strokeThickness: 3
         });
-        this.messageText = this.add.text(640, 420, '', { fontSize: '36px', fill: '#ffff00' }).setOrigin(0.5);
 
         // Create sounds
         this.createSounds();
@@ -249,19 +258,18 @@ class TournamentGameScene extends Phaser.Scene {
     }
 
     loadBallAbilities() {
-        const ballAbilities = {
-            'default': { speedMultiplier: 1, hitboxShrinkMultiplier: 1, scoreMultiplier: 1, minHitboxMultiplier: 1 },
-            'golden': { speedMultiplier: 1, hitboxShrinkMultiplier: 0.85, scoreMultiplier: 1, minHitboxMultiplier: 1 },
-            'fire': { speedMultiplier: 1, hitboxShrinkMultiplier: 1, scoreMultiplier: 2, minHitboxMultiplier: 1 },
-            'steel': { speedMultiplier: 0.9, hitboxShrinkMultiplier: 1, scoreMultiplier: 1, minHitboxMultiplier: 1 },
-            'ghost': { speedMultiplier: 1, hitboxShrinkMultiplier: 1, scoreMultiplier: 1, minHitboxMultiplier: 1.2 },
-            'spark': { speedMultiplier: 1, hitboxShrinkMultiplier: 1, scoreMultiplier: 1.05, minHitboxMultiplier: 1 }
-        };
-        const abilities = ballAbilities[this.equippedBall] || ballAbilities['default'];
-        this.speedMultiplier = abilities.speedMultiplier;
-        this.hitboxShrinkMultiplier = abilities.hitboxShrinkMultiplier;
-        this.scoreMultiplier = abilities.scoreMultiplier;
-        this.minHitboxMultiplier = abilities.minHitboxMultiplier;
+        // Tournament matches are played with the normal ball: the player keeps
+        // the SKIN they equipped (cosmetic only) but no ball ability applies,
+        // so every entrant is on identical footing.
+        this.speedMultiplier = 1;
+        this.hitboxShrinkMultiplier = 1;
+        this.scoreMultiplier = 1;
+        this.minHitboxMultiplier = 1;
+        this.maxSpeedBoost = 300;
+        this.jumpMultiplier = 1;
+        this.boostStepMain = 1.04;
+        this.boostStepLate = 1.02;
+        this.startHitboxMin = false;
     }
 
     getBallTexture() {
@@ -271,7 +279,14 @@ class TournamentGameScene extends Phaser.Scene {
             'fire': 'ball_fire',
             'steel': 'ball_steel',
             'ghost': 'ball_ghost',
-            'spark': 'ball_spark'
+            'spark': 'ball_spark',
+            'rubber': 'ball_rubber',
+            'ice': 'ball_ice',
+            'anchor': 'ball_anchor',
+            'neon': 'ball_neon',
+            'candy': 'ball_candy',
+            'void': 'ball_void',
+            'gauntlet': 'ball_gauntlet'
         };
         return textureMap[this.equippedBall] || 'ball_default';
     }
@@ -364,20 +379,21 @@ class TournamentGameScene extends Phaser.Scene {
         this.playClickSound();
         
         // PHASE 6: Increase ball speed with dynamic rate (same as infinite mode)
+        const maxBoost = this.maxSpeedBoost || 300;
         let increaseRate = 1.04; // 4% by default
         
-        if (this.speedBoost >= 300) {
+        if (this.speedBoost >= maxBoost) {
             increaseRate = 1.0; // Max boost reached
         } else if (this.speedBoost >= 100) {
             increaseRate = 1.02; // After 100%, increase by 2%
         }
         
-        if (this.speedBoost < 300) {
+        if (this.speedBoost < maxBoost) {
             this.ballSpeed = this.ballSpeed * increaseRate;
             const boostAmount = (increaseRate - 1) * 100;
             this.speedBoost += boostAmount;
             this.speedBoost = Math.round(this.speedBoost * 100) / 100;
-            if (this.speedBoost > 300) this.speedBoost = 300;
+            if (this.speedBoost > maxBoost) this.speedBoost = maxBoost;
         }
         
         // Angle variation (same as infinite mode)
@@ -387,14 +403,17 @@ class TournamentGameScene extends Phaser.Scene {
         // Reverse direction toward the right with increased speed
         this.ball.setVelocity(this.ballSpeed, upwardSpeed);
         
-        // Add score (affected by ball ability)
+        // Add score (1 per deflect - tournament balls have no ability bonus)
         const scoreGain = Math.round(this.scoreMultiplier);
         this.score += scoreGain;
+        this.runDeflections = (this.runDeflections || 0) + 1;
         this.scoreText.setText(`Score: ${this.score} / ${this.requiredScore}`);
         this.speedBoostText.setText(`Speed Boost: ${this.speedBoost}%`);
         
         // Screen shake (same as infinite mode)
-        this.cameras.main.shake(100, 0.005);
+        if (window.Settings && window.Settings.isOn('gdShake')) {
+            this.cameras.main.shake(100, 0.005);
+        }
         
         // Score flash (same as infinite mode)
         this.scoreText.setScale(1.3);
@@ -466,85 +485,64 @@ class TournamentGameScene extends Phaser.Scene {
     pauseGame() {
         this.isPaused = true;
         this.physics.pause();
-        
-        // Create pause overlay
-        this.pauseOverlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.7);
-        this.pauseOverlay.setDepth(200);
-        
-        // Pause title
-        this.pauseTitle = this.add.text(640, 200, 'PAUSED', {
-            fontSize: '72px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 6
-        }).setOrigin(0.5).setDepth(201);
-        
-        // Continue button
-        const continueBg = this.add.rectangle(640, 320, 300, 70, 0x00aa00, 1);
-        continueBg.setStrokeStyle(4, 0x00ff00);
-        continueBg.setInteractive();
-        continueBg.setDepth(201);
-        
-        const continueText = this.add.text(640, 320, 'CONTINUE', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(201);
-        
-        continueBg.on('pointerover', () => {
-            continueBg.setScale(1.05);
-            continueText.setScale(1.05);
+
+        this.pauseMenuElements = [];
+
+        const overlay = this.add.rectangle(640, 360, 1280, 720, 0x050a12, 0.78);
+        overlay.setDepth(200);
+        this.pauseMenuElements.push(overlay);
+
+        const card = UI.panel(this, {
+            x: 640, y: 360, w: 480, h: 380, radius: 24,
+            fillTop: 0x1f2c3d, fillBottom: 0x121c28,
+            border: 0x4a6a8a, borderWidth: 2, depth: 201
         });
-        
-        continueBg.on('pointerout', () => {
-            continueBg.setScale(1);
-            continueText.setScale(1);
+        this.pauseMenuElements.push(card);
+
+        const title = this.add.text(640, 236, 'PAUSED', {
+            fontSize: '52px',
+            color: '#ffffff',
+            fontStyle: '900',
+            stroke: '#f0a500',
+            strokeThickness: 5
+        }).setOrigin(0.5).setDepth(202);
+        this.pauseMenuElements.push(title);
+
+        const cont = UI.button(this, {
+            x: 640, y: 340, w: 300, h: 74,
+            label: 'CONTINUE',
+            textSize: 26,
+            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
+            depth: 202,
+            onClick: () => this.resumeGame()
         });
-        
-        continueBg.on('pointerdown', () => {
-            this.resumeGame();
+        this.pauseMenuElements.push(cont);
+
+        const menu = UI.button(this, {
+            x: 640, y: 434, w: 300, h: 74,
+            label: 'TOURNAMENT MENU',
+            textSize: 22,
+            fillTop: 0xffb340, fillBottom: 0xf08a1d,
+            depth: 202,
+            onClick: () => this.scene.start('TournamentMenuScene')
         });
-        
-        // Menu button
-        const menuBg = this.add.rectangle(640, 420, 300, 70, 0xcc6600, 1);
-        menuBg.setStrokeStyle(4, 0xff9900);
-        menuBg.setInteractive();
-        menuBg.setDepth(201);
-        
-        const menuText = this.add.text(640, 420, 'MENU', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(201);
-        
-        menuBg.on('pointerover', () => {
-            menuBg.setScale(1.05);
-            menuText.setScale(1.05);
-        });
-        
-        menuBg.on('pointerout', () => {
-            menuBg.setScale(1);
-            menuText.setScale(1);
-        });
-        
-        menuBg.on('pointerdown', () => {
-            this.scene.start('TournamentMenuScene');
-        });
-        
-        // Store pause menu elements for cleanup
-        this.pauseMenuElements = [this.pauseOverlay, this.pauseTitle, continueBg, continueText, menuBg, menuText];
+        this.pauseMenuElements.push(menu);
+
+        this.pauseOverlay = overlay;
+        this.pauseTitle = title;
     }
 
     resumeGame() {
         this.isPaused = false;
         this.physics.resume();
-        
+
         // Remove pause menu elements
         if (this.pauseMenuElements) {
             this.pauseMenuElements.forEach(element => element.destroy());
             this.pauseMenuElements = null;
         }
+        this.pauseOverlay = null;
+        this.pauseTitle = null;
     }
 
     update(time, delta) {
@@ -557,10 +555,11 @@ class TournamentGameScene extends Phaser.Scene {
         
         // Only show hitbox when ball is moving left and left of middle
         const ballLeftOfMiddle = this.ball.x < 640;
+        const alwaysOn = window.Settings && window.Settings.isOn('gdHitboxAlways');
         if (this.ball.body.velocity.x < 0 && ballLeftOfMiddle) {
             this.hitboxCircle.setAlpha(0.3);
         } else {
-            this.hitboxCircle.setAlpha(0.1);
+            this.hitboxCircle.setAlpha(alwaysOn ? 0.25 : 0.1);
         }
 
         // Update countdown text
@@ -606,14 +605,16 @@ class TournamentGameScene extends Phaser.Scene {
         // Particle explosion (same as infinite mode)
         const ballTexture = this.getBallTexture();
         const finalTexture = this.textures.exists(ballTexture) ? ballTexture : 'ball_default';
-        const particles = this.add.particles(this.ball.x, this.ball.y, finalTexture, {
-            speed: { min: 100, max: 300 },
-            scale: { start: 0.3, end: 0 },
-            alpha: { start: 1, end: 0 },
-            lifespan: 800,
-            quantity: 20,
-            blendMode: 'ADD'
-        });
+        if (!window.Settings || window.Settings.isOn('gdParticles')) {
+            this.add.particles(this.ball.x, this.ball.y, finalTexture, {
+                speed: { min: 100, max: 300 },
+                scale: { start: 0.3, end: 0 },
+                alpha: { start: 1, end: 0 },
+                lifespan: 800,
+                quantity: 20,
+                blendMode: 'ADD'
+            });
+        }
 
         // Stop ball movement
         this.ball.setVelocity(0, 0);
@@ -622,10 +623,14 @@ class TournamentGameScene extends Phaser.Scene {
         // Fade screen to black (same as infinite mode)
         this.cameras.main.fadeOut(1000, 0, 0, 0);
 
-        // Award money equal to score
-        const money = this.score;
+        // Award money at $3 per deflection
+        const money = this.score * 3;
         const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || '0');
         localStorage.setItem('goalDefenderMoney', (currentMoney + money).toString());
+
+        // Bank the deflections toward the lifetime total
+        const lifetime = parseInt(localStorage.getItem('goalDefenderDeflections') || '0');
+        localStorage.setItem('goalDefenderDeflections', lifetime + this.score);
 
         // Update tournamentProgress
         const progress = JSON.parse(localStorage.getItem('tournamentProgress') || '{}');
@@ -692,14 +697,16 @@ class TournamentGameScene extends Phaser.Scene {
         // Particle explosion (same as infinite mode)
         const ballTexture = this.getBallTexture();
         const finalTexture = this.textures.exists(ballTexture) ? ballTexture : 'ball_default';
-        const particles = this.add.particles(this.ball.x, this.ball.y, finalTexture, {
-            speed: { min: 100, max: 300 },
-            scale: { start: 0.3, end: 0 },
-            alpha: { start: 1, end: 0 },
-            lifespan: 800,
-            quantity: 20,
-            blendMode: 'ADD'
-        });
+        if (!window.Settings || window.Settings.isOn('gdParticles')) {
+            this.add.particles(this.ball.x, this.ball.y, finalTexture, {
+                speed: { min: 100, max: 300 },
+                scale: { start: 0.3, end: 0 },
+                alpha: { start: 1, end: 0 },
+                lifespan: 800,
+                quantity: 20,
+                blendMode: 'ADD'
+            });
+        }
 
         // Stop ball movement
         this.ball.setVelocity(0, 0);
@@ -711,8 +718,10 @@ class TournamentGameScene extends Phaser.Scene {
         // Clear active tournament
         localStorage.setItem('tournamentActive', 'false');
         
-        // If this was Champions Cup, lock it again
-        if (this.mode === 'champions') {
+        // Losing a Champions run re-locks the cup, but only if the player has
+        // not already earned it. Otherwise a single loss would take away a
+        // trophy they legitimately won.
+        if (this.mode === 'champions' && !this.everWonChampions) {
             localStorage.setItem('tournamentChampionsWon', 'false');
             console.log('Champions Cup locked again due to defeat');
         }
@@ -766,6 +775,11 @@ class TournamentGameScene extends Phaser.Scene {
                     break;
                 }
             }
+        } else if (!nextRound && bracket[nextRound] === undefined && bracket.finals) {
+            // Winning the final: record the champion. Without this the bracket
+            // kept showing an empty trophy slot after the tournament was won.
+            bracket.finals.winner = playerTeam;
+            console.log('Player won the tournament:', playerTeam);
         }
         
         // Save updated bracket
@@ -823,17 +837,7 @@ class TournamentGameScene extends Phaser.Scene {
     }
 
     createMuteButton() {
-        const x = 1230;
-        const y = 30;
-        const muteButton = this.add.image(x, y, isMuted ? 'volume-mute' : 'volume-unmute');
-        muteButton.setScale(0.08);
-        muteButton.setInteractive();
-        muteButton.on('pointerover', () => { muteButton.setScale(0.1); });
-        muteButton.on('pointerout', () => { muteButton.setScale(0.08); });
-        muteButton.on('pointerdown', () => {
-            isMuted = !isMuted;
-            localStorage.setItem('goalDefenderMuted', isMuted);
-            muteButton.setTexture(isMuted ? 'volume-mute' : 'volume-unmute');
-        });
+        // Phones have no ESC key, so pause needs an on-screen button.
+        UI.topRight(this, { onPause: () => this.togglePause() });
     }
 }

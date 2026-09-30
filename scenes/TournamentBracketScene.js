@@ -7,10 +7,17 @@ class TournamentBracketScene extends Phaser.Scene {
         this.mode = data.mode || localStorage.getItem('tournamentMode') || 'qualifiers';
         this.currentRound = data.round || localStorage.getItem('tournamentRound') || (this.mode === 'qualifiers' ? 'roundOf16' : 'roundOf32');
         
-        // Ensure tournament remains active when viewing bracket
-        localStorage.setItem('tournamentActive', 'true');
+        // Only mark the tournament active if it is genuinely in progress.
+        // Previously this ran unconditionally, so simply viewing a bracket
+        // resurrected a finished tournament and brought back the
+        // "CONTINUE TOURNAMENT" button on the menu.
+        if (localStorage.getItem('tournamentRound')) {
+            localStorage.setItem('tournamentActive', 'true');
+        }
         localStorage.setItem('tournamentMode', this.mode);
-        localStorage.setItem('tournamentRound', this.currentRound);
+        if (!localStorage.getItem('tournamentRound')) {
+            localStorage.setItem('tournamentRound', this.currentRound);
+        }
         
         console.log('TournamentBracketScene init:', { mode: this.mode, currentRound: this.currentRound });
     }
@@ -51,54 +58,34 @@ class TournamentBracketScene extends Phaser.Scene {
         // Draw bracket
         this.drawBracket();
         
-        // Continue button
-        const continueBtn = this.add.rectangle(640, 650, 250, 60, 0x00aa00, 1);
-        continueBtn.setStrokeStyle(3, 0x00ff00);
-        continueBtn.setInteractive();
-        
-        const continueText = this.add.text(640, 650, 'PLAY MATCH', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#003300',
-            strokeThickness: 3
-        }).setOrigin(0.5);
-        
-        continueBtn.on('pointerover', () => {
-            continueBtn.setScale(1.05);
-            continueText.setScale(1.05);
-            continueBtn.setFillStyle(0x00ff00);
+        // Play match button
+        UI.button(this, {
+            x: 640, y: 662, w: 280, h: 64,
+            label: 'PLAY MATCH',
+            textSize: 24,
+            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
+            radius: 16,
+            onClick: () => {
+                this.scene.start('TournamentGameScene', {
+                    mode: this.mode,
+                    round: this.currentRound,
+                    opponent: this.getNextOpponent()
+                });
+            }
         });
-        
-        continueBtn.on('pointerout', () => {
-            continueBtn.setScale(1);
-            continueText.setScale(1);
-            continueBtn.setFillStyle(0x00aa00);
-        });
-        
-        continueBtn.on('pointerdown', () => {
-            this.scene.start('TournamentGameScene', {
-                mode: this.mode,
-                round: this.currentRound,
-                opponent: this.getNextOpponent()
-            });
-        });
-        
+
         // Back to menu button
-        const backBtn = this.add.rectangle(100, 650, 150, 50, 0x666666, 1);
-        backBtn.setStrokeStyle(2, 0x999999);
-        backBtn.setInteractive();
-        
-        const backText = this.add.text(100, 650, 'BACK', {
-            fontSize: '20px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5);
-        
-        backBtn.on('pointerdown', () => {
-            // Tournament remains active when going back to menu
-            console.log('Going back to tournament menu, tournament remains active');
-            this.scene.start('TournamentMenuScene');
+        UI.button(this, {
+            x: 130, y: 662, w: 180, h: 56,
+            label: 'BACK',
+            textSize: 20,
+            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
+            radius: 14,
+            onClick: () => {
+                // Tournament remains active when going back to menu
+                console.log('Going back to tournament menu, tournament remains active');
+                this.scene.start('TournamentMenuScene');
+            }
         });
     }
     
@@ -270,10 +257,20 @@ class TournamentBracketScene extends Phaser.Scene {
         
         // Winner
         this.add.text(1000, 120, 'WINNER', { fontSize: '16px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
-        const winner = finalMatch.winner || '🏆';
-        const winnerColor = winner === playerTeam ? 0xffff00 : (winner !== '🏆' ? 0x00aa00 : 0xffcc00);
+        const noWinnerYet = !finalMatch.winner;
+        const winnerColor = finalMatch.winner === playerTeam ? 0xffff00 : (noWinnerYet ? 0xffcc00 : 0x00aa00);
         this.add.rectangle(1000, startY + 210, boxWidth, boxHeight, winnerColor, 1).setStrokeStyle(2, 0xffffff);
-        this.add.text(1000, startY + 210, winner === '🏆' ? winner : this.truncateTeamName(winner), { fontSize: winner === '🏆' ? '20px' : '12px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+
+        if (noWinnerYet) {
+            // No champion decided yet - show the trophy icon, or "TBD" as a fallback
+            if (this.textures.exists('trophy-icon')) {
+                this.add.image(1000, startY + 210, 'trophy-icon').setScale(0.3);
+            } else {
+                this.add.text(1000, startY + 210, 'TBD', { fontSize: '20px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            }
+        } else {
+            this.add.text(1000, startY + 210, this.truncateTeamName(finalMatch.winner), { fontSize: '12px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+        }
     }
     
     drawBracket32() {

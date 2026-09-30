@@ -68,10 +68,12 @@ class TournamentVictoryScene extends Phaser.Scene {
         }
 
         // Continue button
-        const cont = this.add.rectangle(640, 560, 320, 64, 0x228B22).setInteractive();
-        this.add.text(640, 560, 'BACK TO MENU', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-        cont.on('pointerdown', () => {
-            this.scene.start('TournamentMenuScene');
+        UI.button(this, {
+            x: 640, y: 580, w: 300, h: 70,
+            label: 'BACK TO MENU',
+            textSize: 24,
+            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
+            onClick: () => this.scene.start('TournamentMenuScene')
         });
     }
 
@@ -97,6 +99,12 @@ class TournamentVictoryScene extends Phaser.Scene {
                 moneyEarned: this.stats.moneyEarned || 0
             };
             localStorage.setItem(key, JSON.stringify(stats));
+
+            // Count the win for the achievement system
+            if (window.Achievements) {
+                window.Achievements.addTournamentWin(this.mode);
+                window.Achievements.check(this);
+            }
         }
 
         // mark tournament inactive

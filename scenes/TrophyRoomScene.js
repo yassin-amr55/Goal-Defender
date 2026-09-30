@@ -1,4 +1,4 @@
-class TrophyRoomScene extends Phaser.Scene {
+﻿class TrophyRoomScene extends Phaser.Scene {
     constructor() {
         super({ key: 'TrophyRoomScene' });
     }
@@ -97,44 +97,36 @@ class TrophyRoomScene extends Phaser.Scene {
             true
         );
 
-        // BACK button at (640, 650)
-        const backBg = this.add.rectangle(640, 650, 200, 60, 0x666666, 1);
-        backBg.setStrokeStyle(3, 0x999999);
-        backBg.setInteractive();
-
-        const backText = this.add.text(640, 650, 'BACK', {
-            fontSize: '32px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 4
-        }).setOrigin(0.5);
-
-        backBg.on('pointerover', () => {
-            backBg.setScale(1.05);
-            backBg.setFillStyle(0x888888);
-        });
-
-        backBg.on('pointerout', () => {
-            backBg.setScale(1);
-            backBg.setFillStyle(0x666666);
-        });
-
-        backBg.on('pointerdown', () => {
-            this.scene.start('TournamentMenuScene');
+        // BACK button
+        UI.button(this, {
+            x: 640, y: 656, w: 220, h: 64,
+            label: 'BACK',
+            textSize: 24,
+            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
+            radius: 16,
+            onClick: () => this.scene.start('TournamentMenuScene')
         });
 
         // Mute button
-        this.createMuteButton();
+        UI.topRight(this, {});
     }
 
     createTrophyDisplay(x, label, trophyImageKey, winCount, dateWon, isChampions = false) {
-        // Shelf display (rectangle at y=400)
-        const shelf = this.add.rectangle(x, 400, 300, 20, 0x8b7355, 1);
+        // isWon must be resolved before it is used below
+        const isWon = winCount > 0;
+
+        // Display case + wooden shelf
+        UI.panel(this, {
+            x: x, y: 340, w: 360, h: 300, radius: 20,
+            fillTop: 0x1f2c3d, fillBottom: 0x121c28,
+            border: isWon ? 0xf0b429 : 0x3d5a73,
+            borderWidth: 2
+        });
+
+        const shelf = this.add.rectangle(x, 452, 300, 18, 0x8b7355, 1);
         shelf.setStrokeStyle(2, 0x5c4a33);
 
         // Trophy image at y=320 (above shelf)
-        const isWon = winCount > 0;
         let trophyImage = null;
         if (this.textures.exists(trophyImageKey)) {
             trophyImage = this.add.image(x, 280, trophyImageKey);
@@ -152,37 +144,36 @@ class TrophyRoomScene extends Phaser.Scene {
                     this.createSparkles(x, 280);
                 }
             }
-        } else {
-            // Fallback: use emoji
-            const trophyEmoji = this.add.text(x, 280, '🏆', {
-                fontSize: isWon ? '60px' : '40px',
-                alpha: isWon ? 1 : 0.3
-            }).setOrigin(0.5);
-            
+        } else if (this.textures.exists('trophy-icon')) {
+            // Fallback: vector trophy icon
+            const trophyIcon = this.add.image(x, 280, 'trophy-icon');
+            trophyIcon.setScale(isWon ? 0.55 : 0.45);
+            trophyIcon.setAlpha(isWon ? 1 : 0.3);
+
             if (!isWon) {
-                trophyEmoji.setTint(0x888888);
+                trophyIcon.setTint(0x888888);
             }
         }
 
         // Label below shelf: "QUALIFIERS CUP" or "CHAMPIONS CUP"
-        const labelText = this.add.text(x, 440, label, {
-            fontSize: '24px',
-            fill: '#ffffff',
-            fontStyle: 'bold'
+        const labelText = this.add.text(x, 484, label, {
+            fontSize: '22px',
+            color: '#ffffff',
+            fontStyle: '800'
         }).setOrigin(0.5);
 
         // Win count
-        const countText = this.add.text(x, 465, `Won: ${winCount}`, {
-            fontSize: '20px',
-            fill: '#ffcc00',
-            fontStyle: 'bold'
+        const countText = this.add.text(x, 512, `Won: ${winCount}`, {
+            fontSize: '18px',
+            color: isWon ? '#ffd45e' : '#7f8c99',
+            fontStyle: '800'
         }).setOrigin(0.5);
 
         // Date won (if won)
         if (isWon && dateWon) {
-            const dateText = this.add.text(x, 495, `Last: ${dateWon}`, {
-                fontSize: '14px',
-                fill: '#cccccc'
+            const dateText = this.add.text(x, 540, `Last: ${dateWon}`, {
+                fontSize: '13px',
+                color: '#93a8bd'
             }).setOrigin(0.5);
 
             // Stats below
@@ -190,10 +181,12 @@ class TrophyRoomScene extends Phaser.Scene {
                 isChampions ? 'tournamentChampionsStats' : 'tournamentQualifiersStats'
             ) || '{}');
 
-            if (statsData.deflects !== undefined) {
-                const statsText = this.add.text(x, 530, `Last Match:\nDeflects: ${statsData.deflects}\nMoney: $${statsData.money}`, {
+            // awardTrophy() writes { date, matchesWon, totalDeflects, moneyEarned }
+            if (statsData.totalDeflects !== undefined) {
+                const statsText = this.add.text(x, 568, `Deflects: ${statsData.totalDeflects}\nMoney: $${statsData.moneyEarned || 0}`, {
                     fontSize: '12px',
-                    fill: '#ffffff',
+                    color: '#93a8bd',
+                    fontStyle: '600',
                     align: 'center'
                 }).setOrigin(0.5);
             }
@@ -201,52 +194,32 @@ class TrophyRoomScene extends Phaser.Scene {
     }
 
     createSparkles(x, y) {
-        // Create sparkle particles for Champions trophy
-        const particles = this.add.particles(0xffff00);
-        const emitter = particles.createEmitter({
-            x: x,
-            y: y,
+        // Create sparkle particles for Champions trophy.
+        // Phaser 3.60+ takes the emitter config directly; the old
+        // add.particles(x).createEmitter() API no longer exists.
+        const emitter = this.add.particles(x, y, 'ball_default', {
             speed: { min: -100, max: 100 },
             angle: { min: 0, max: 360 },
-            scale: { start: 0.5, end: 0 },
+            scale: { start: 0.2, end: 0 },
             alpha: { start: 1, end: 0 },
             lifespan: 1000,
             gravityY: -300,
-            emitZone: { type: 'circle', source: new Phaser.Geom.Circle(0, 0, 10) }
+            tint: 0xffff00,
+            quantity: 1,
+            frequency: 250
         });
-
-        emitter.explode(20);
 
         // Repeat every 5 seconds
         this.time.addEvent({
             delay: 5000,
             callback: () => {
-                emitter.explode(10);
+                if (emitter && emitter.emitParticleAt) emitter.emitParticleAt(x, y);
             },
             loop: true
         });
     }
 
     createMuteButton() {
-        const x = 1230;
-        const y = 30;
-        
-        const muteButton = this.add.image(x, y, isMuted ? 'volume-mute' : 'volume-unmute');
-        muteButton.setScale(0.08);
-        muteButton.setInteractive();
-
-        muteButton.on('pointerover', () => {
-            muteButton.setScale(0.1);
-        });
-
-        muteButton.on('pointerout', () => {
-            muteButton.setScale(0.08);
-        });
-
-        muteButton.on('pointerdown', () => {
-            isMuted = !isMuted;
-            localStorage.setItem('goalDefenderMuted', isMuted);
-            muteButton.setTexture(isMuted ? 'volume-mute' : 'volume-unmute');
-        });
+        UI.topRight(this, {});
     }
 }

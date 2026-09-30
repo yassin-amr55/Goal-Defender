@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- two rounded vertical bars: the universal pause glyph -->
+  <rect x="38" y="26" width="20" height="76" rx="7" fill="#ffffff"/>
+  <rect x="70" y="26" width="20" height="76" rx="7" fill="#ffffff"/>
+</svg>

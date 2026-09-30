@@ -1,4 +1,4 @@
-class GameOverScene extends Phaser.Scene {
+﻿class GameOverScene extends Phaser.Scene {
     constructor() {
         super({ key: 'GameOverScene' });
     }
@@ -6,6 +6,7 @@ class GameOverScene extends Phaser.Scene {
     init(data) {
         // Receive score from GameScene
         this.finalScore = data.score || 0;
+        this.finalDeflections = data.deflections || 0;
     }
 
     create() {
@@ -39,160 +40,84 @@ class GameOverScene extends Phaser.Scene {
             grass.setAlpha(0.4); // Slightly darker than ground
         }
 
-        // PHASE 9: Add money earned (equal to score)
-        const moneyEarned = this.finalScore;
+        // PHASE 9: Add money earned ($3 per deflection)
+        // deflections is captured in init() - `data` is not in scope here.
+        const deflections = this.finalDeflections || this.finalScore;
+        const moneyEarned = deflections * 3;
         const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0);
         const newTotal = currentMoney + moneyEarned;
         localStorage.setItem('goalDefenderMoney', newTotal);
 
-        // Game Over title shadow
-        this.add.text(642, 132, 'GAME OVER', {
-            fontSize: '72px',
-            fill: '#000000',
-            fontStyle: 'bold',
-            alpha: 0.5
+        // Title
+        this.add.text(640, 132, 'GAME OVER', {
+            fontSize: '70px',
+            color: '#000000',
+            fontStyle: '900',
+            alpha: 0.45
         }).setOrigin(0.5);
 
-        // Game Over title
-        this.add.text(640, 130, 'GAME OVER', {
-            fontSize: '72px',
-            fill: '#ff0000',
-            fontStyle: 'bold',
-            stroke: '#660000',
-            strokeThickness: 8,
-            shadow: {
-                offsetX: 3,
-                offsetY: 3,
-                color: '#000000',
-                blur: 5,
-                fill: true
-            }
+        this.add.text(640, 128, 'GAME OVER', {
+            fontSize: '70px',
+            color: '#ff5a5a',
+            fontStyle: '900',
+            stroke: '#7a0f0f',
+            strokeThickness: 8
         }).setOrigin(0.5);
 
-        // Stats container
-        const statsBg = this.add.rectangle(640, 290, 500, 180, 0x000000, 0.7);
-        statsBg.setStrokeStyle(4, 0xffffff);
+        // Stats panel
+        UI.panel(this, {
+            x: 640, y: 320, w: 520, h: 220, radius: 22,
+            fillTop: 0x1f2c3d, fillBottom: 0x121c28,
+            border: 0x4a6a8a, borderWidth: 2
+        });
 
         // Show final score
-        this.add.text(640, 230, 'SCORE: ' + this.finalScore, {
-            fontSize: '52px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 6,
-            shadow: {
-                offsetX: 2,
-                offsetY: 2,
-                color: '#000000',
-                blur: 3,
-                fill: true
-            }
+        this.add.text(640, 250, 'SCORE', {
+            fontSize: '17px',
+            color: '#8fa6bd',
+            fontStyle: '800'
         }).setOrigin(0.5);
 
-        // PHASE 9: Show money earned
-        this.add.text(640, 300, 'Money Earned: $' + moneyEarned, {
-            fontSize: '38px',
-            fill: '#ffff00',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 5,
-            shadow: {
-                offsetX: 2,
-                offsetY: 2,
-                color: '#000000',
-                blur: 3,
-                fill: true
-            }
+        this.add.text(640, 292, '' + this.finalScore, {
+            fontSize: '62px',
+            color: '#ffffff',
+            fontStyle: '900'
         }).setOrigin(0.5);
 
-        // Show total money
-        this.add.text(640, 350, 'Total Money: $' + newTotal, {
-            fontSize: '34px',
-            fill: '#00ff00',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 5,
-            shadow: {
-                offsetX: 2,
-                offsetY: 2,
-                color: '#000000',
-                blur: 3,
-                fill: true
-            }
+        // PHASE 9: money earned and deflection count
+        this.add.text(640, 344, 'DEFLECTIONS', {
+            fontSize: '15px',
+            color: '#8fa6bd',
+            fontStyle: '800'
         }).setOrigin(0.5);
 
-        // Play Again button background
-        const playAgainBg = this.add.rectangle(640, 450, 280, 70, 0x00aa00, 1);
-        playAgainBg.setStrokeStyle(4, 0x00ff00);
-        playAgainBg.setInteractive();
-
-        // Play Again button text
-        const playAgainButton = this.add.text(640, 450, 'PLAY AGAIN', {
-            fontSize: '42px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#003300',
-            strokeThickness: 5,
-            shadow: {
-                offsetX: 2,
-                offsetY: 2,
-                color: '#000000',
-                blur: 4,
-                fill: true
-            }
+        this.add.text(640, 374, '' + deflections, {
+            fontSize: '30px',
+            color: '#ffffff',
+            fontStyle: '900'
         }).setOrigin(0.5);
 
-        playAgainBg.on('pointerover', () => {
-            playAgainBg.setScale(1.05);
-            playAgainButton.setScale(1.05);
-            playAgainBg.setFillStyle(0x00ff00);
-        });
-
-        playAgainBg.on('pointerout', () => {
-            playAgainBg.setScale(1);
-            playAgainButton.setScale(1);
-            playAgainBg.setFillStyle(0x00aa00);
-        });
-
-        playAgainBg.on('pointerdown', () => {
-            this.scene.start('GameScene');
-        });
-
-        // Home button background
-        const homeBg = this.add.rectangle(640, 540, 280, 70, 0xcc6600, 1);
-        homeBg.setStrokeStyle(4, 0xffaa00);
-        homeBg.setInteractive();
-
-        // Home button text
-        const homeButton = this.add.text(640, 540, 'HOME', {
-            fontSize: '42px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#663300',
-            strokeThickness: 5,
-            shadow: {
-                offsetX: 2,
-                offsetY: 2,
-                color: '#000000',
-                blur: 4,
-                fill: true
-            }
+        this.add.text(640, 410, '+ $' + moneyEarned, {
+            fontSize: '26px',
+            color: '#ffd45e',
+            fontStyle: '900'
         }).setOrigin(0.5);
 
-        homeBg.on('pointerover', () => {
-            homeBg.setScale(1.05);
-            homeButton.setScale(1.05);
-            homeBg.setFillStyle(0xffaa00);
+        // Buttons
+        UI.button(this, {
+            x: 520, y: 520, w: 250, h: 76,
+            label: 'PLAY AGAIN',
+            textSize: 25,
+            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
+            onClick: () => this.scene.start('GameScene')
         });
 
-        homeBg.on('pointerout', () => {
-            homeBg.setScale(1);
-            homeButton.setScale(1);
-            homeBg.setFillStyle(0xcc6600);
-        });
-
-        homeBg.on('pointerdown', () => {
-            this.scene.start('MenuScene');
+        UI.button(this, {
+            x: 790, y: 520, w: 220, h: 76,
+            label: 'HOME',
+            textSize: 25,
+            fillTop: 0xffb340, fillBottom: 0xf08a1d,
+            onClick: () => this.scene.start('MenuScene')
         });
 
         // Mute/Unmute button
@@ -206,7 +131,7 @@ class GameOverScene extends Phaser.Scene {
         const y = 30;
         
         // Create the mute button sprite
-        this.muteButton = this.add.image(x, y, isMuted ? 'volume-mute' : 'volume-unmute');
+        this.muteButton = this.add.image(x, y, window.Settings.isOn('gdMuted') ? 'volume-mute' : 'volume-unmute');
         this.muteButton.setScale(0.08);
         this.muteButton.setInteractive();
 
@@ -219,9 +144,9 @@ class GameOverScene extends Phaser.Scene {
         });
 
         this.muteButton.on('pointerdown', () => {
-            isMuted = !isMuted;
-            localStorage.setItem('goalDefenderMuted', isMuted);
-            this.muteButton.setTexture(isMuted ? 'volume-mute' : 'volume-unmute');
+            window.Settings.toggle('gdMuted');
+            isMuted = window.Settings.isOn('gdMuted');
+            this.muteButton.setTexture(window.Settings.isOn('gdMuted') ? 'volume-mute' : 'volume-unmute');
         });
     }
 }

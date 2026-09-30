@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d8dee6"/>
+      <stop offset="50%" stop-color="#9aa5b1"/>
+      <stop offset="100%" stop-color="#6b7683"/>
+    </linearGradient>
+  </defs>
+
+  <!-- shackle -->
+  <path d="M44 56 V42 a20 20 0 0 1 40 0 v14"
+        fill="none" stroke="#1a1a1a" stroke-width="20" stroke-linecap="round"/>
+  <path d="M44 56 V42 a20 20 0 0 1 40 0 v14"
+        fill="none" stroke="url(#body)" stroke-width="11" stroke-linecap="round"/>
+
+  <!-- body -->
+  <rect x="24" y="54" width="80" height="62" rx="10" fill="#1a1a1a"/>
+  <rect x="29" y="59" width="70" height="52" rx="7" fill="url(#body)"/>
+
+  <!-- top highlight -->
+  <rect x="35" y="64" width="58" height="10" rx="5" fill="#ffffff" opacity="0.35"/>
+
+  <!-- keyhole -->
+  <circle cx="64" cy="82" r="9" fill="#1a1a1a"/>
+  <rect x="60" y="82" width="8" height="20" rx="4" fill="#1a1a1a"/>
+</svg>

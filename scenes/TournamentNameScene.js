@@ -1,4 +1,4 @@
-class TournamentNameScene extends Phaser.Scene {
+﻿class TournamentNameScene extends Phaser.Scene {
     constructor() {
         super({ key: 'TournamentNameScene' });
     }
@@ -77,8 +77,12 @@ class TournamentNameScene extends Phaser.Scene {
         }).setOrigin(0.5);
 
         // Input box background at (640, 360)
-        const inputBg = this.add.rectangle(640, 360, 500, 80, 0xffffff, 1);
-        inputBg.setStrokeStyle(4, 0x000000);
+        // Rounded backing panel behind the HTML input
+        UI.panel(this, {
+            x: 640, y: 360, w: 540, h: 92, radius: 20,
+            fillTop: 0x0d1723, fillBottom: 0x080f18,
+            border: 0xf0b429, borderWidth: 2, depth: 8
+        });
 
         // Create HTML input element overlay
         const inputElement = document.createElement('input');
@@ -86,72 +90,71 @@ class TournamentNameScene extends Phaser.Scene {
         inputElement.placeholder = 'Your Team Name...';
         inputElement.maxLength = '20';
         inputElement.id = 'tournament-name-input';
-        
-        // Style the input
+
+        // Match the in-game UI: dark field, gold border, Nunito
         inputElement.style.position = 'absolute';
         inputElement.style.left = '50%';
         inputElement.style.top = '50%';
         inputElement.style.transform = 'translate(-50%, -50%)';
         inputElement.style.width = '500px';
-        inputElement.style.height = '80px';
-        inputElement.style.fontSize = '32px';
-        inputElement.style.padding = '10px';
-        inputElement.style.border = '4px solid #000000';
-        inputElement.style.backgroundColor = '#ffffff';
-        inputElement.style.color = '#000000';
-        inputElement.style.fontWeight = 'bold';
+        inputElement.style.height = '72px';
+        inputElement.style.fontSize = '30px';
+        inputElement.style.padding = '10px 18px';
+        inputElement.style.border = '3px solid #f0b429';
+        inputElement.style.borderRadius = '14px';
+        inputElement.style.background = 'rgba(8,15,24,0.95)';
+        inputElement.style.color = '#ffffff';
+        inputElement.style.fontWeight = '700';
         inputElement.style.textAlign = 'center';
-        inputElement.style.fontFamily = 'Arial, sans-serif';
+        inputElement.style.fontFamily = UI.FAMILY;
         inputElement.style.boxSizing = 'border-box';
         inputElement.style.zIndex = '9998';
-        
+        inputElement.style.outline = 'none';
+        inputElement.style.boxShadow = 'none';
+        inputElement.style.caretColor = '#ffd45e';
+
         document.body.appendChild(inputElement);
         inputElement.focus();
 
         // Store reference for cleanup
         this.inputElement = inputElement;
 
-        // START TOURNAMENT button at (640, 480) - wider and slightly smaller text
-        const startBg = this.add.rectangle(640, 480, 360, 70, 0x00aa00, 1);
-        startBg.setStrokeStyle(4, 0x00ff00);
-        startBg.setInteractive();
-
-        const startText = this.add.text(640, 480, 'START TOURNAMENT', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 4
-        }).setOrigin(0.5);
-
-        startBg.on('pointerover', () => {
-            if (inputElement.value.length > 0) {
-                startBg.setScale(1.05);
-                startBg.setFillStyle(0x00ff00);
-            }
-        });
-
-        startBg.on('pointerout', () => {
-            startBg.setScale(1);
-            startBg.setFillStyle(0x00aa00);
-        });
-
-        startBg.on('pointerdown', () => {
-            if (inputElement.value.length > 0) {
+        // START TOURNAMENT button
+        const startBtn = UI.button(this, {
+            x: 640, y: 486, w: 360, h: 76,
+            label: 'START TOURNAMENT',
+            textSize: 24,
+            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
+            onClick: () => {
+                if (inputElement.value.trim().length === 0) return;
                 // Save team name and initialize tournament
                 const teamName = inputElement.value.trim();
                 localStorage.setItem('tournamentTeamName', teamName);
                 localStorage.setItem('tournamentMode', this.tournamentMode);
                 localStorage.setItem('tournamentActive', 'true');
-                
+
                 // Set initial round
                 const initialRound = this.tournamentMode === 'qualifiers' ? 'roundOf16' : 'roundOf32';
                 localStorage.setItem('tournamentRound', initialRound);
-                
+
                 // Clear any existing bracket to force regeneration
                 localStorage.removeItem('tournamentBracket');
-                
+
+                // Reset per-tournament stats, otherwise the victory screen
+                // shows totals accumulated across every tournament ever played
+                localStorage.setItem('tournamentProgress', JSON.stringify({
+                    matchesWon: 0,
+                    totalDeflects: 0,
+                    moneyEarned: 0
+                }));
+
                 console.log('Starting new tournament:', { teamName, mode: this.tournamentMode, round: initialRound });
+
+                // Count the tournament for the achievement system
+                if (window.Achievements) {
+                    window.Achievements.addTournamentPlayed();
+                    window.Achievements.check(this);
+                }
 
                 // Remove input element
                 inputElement.remove();
@@ -161,70 +164,37 @@ class TournamentNameScene extends Phaser.Scene {
             }
         });
 
-        // BACK button at (640, 570)
-        const backBg = this.add.rectangle(640, 570, 200, 60, 0x666666, 1);
-        backBg.setStrokeStyle(3, 0x999999);
-        backBg.setInteractive();
-
-        const backText = this.add.text(640, 570, 'BACK', {
-            fontSize: '28px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 3
-        }).setOrigin(0.5);
-
-        backBg.on('pointerover', () => {
-            backBg.setScale(1.05);
-            backBg.setFillStyle(0x888888);
-        });
-
-        backBg.on('pointerout', () => {
-            backBg.setScale(1);
-            backBg.setFillStyle(0x666666);
-        });
-
-        backBg.on('pointerdown', () => {
-            // Remove input element
-            inputElement.remove();
-            this.scene.start('TournamentMenuScene');
+        // BACK button
+        UI.button(this, {
+            x: 640, y: 578, w: 220, h: 64,
+            label: 'BACK',
+            textSize: 24,
+            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
+            radius: 16,
+            onClick: () => {
+                inputElement.remove();
+                this.scene.start('TournamentMenuScene');
+            }
         });
 
         // Mute button
-        this.createMuteButton();
+        UI.topRight(this, {});
     }
 
-    createMuteButton() {
-        const x = 1230;
-        const y = 30;
-        
-        const muteButton = this.add.image(x, y, isMuted ? 'volume-mute' : 'volume-unmute');
-        muteButton.setScale(0.08);
-        muteButton.setInteractive();
-
-        muteButton.on('pointerover', () => {
-            muteButton.setScale(0.1);
-        });
-
-        muteButton.on('pointerout', () => {
-            muteButton.setScale(0.08);
-        });
-
-        muteButton.on('pointerdown', () => {
-            isMuted = !isMuted;
-            localStorage.setItem('goalDefenderMuted', isMuted);
-            muteButton.setTexture(isMuted ? 'volume-mute' : 'volume-unmute');
-        });
-    }
-
+    // Phaser does not call methods named shutdown()/stop() automatically.
+    // These are the real lifecycle hooks, so the <input> is always cleaned up.
     shutdown() {
-        // Clean up input element if it exists
-        if (this.inputElement && this.inputElement.parentNode) {
-            this.inputElement.remove();
-        }
+        this.removeInputElement();
     }
 
     stop() {
-        this.shutdown();
+        this.removeInputElement();
+    }
+
+    removeInputElement() {
+        if (this.inputElement && this.inputElement.parentNode) {
+            this.inputElement.remove();
+        }
+        this.inputElement = null;
     }
 }

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffe9a8"/>
+      <stop offset="45%" stop-color="#ffcc00"/>
+      <stop offset="100%" stop-color="#d98f00"/>
+    </linearGradient>
+    <linearGradient id="goldDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffc83d"/>
+      <stop offset="100%" stop-color="#b37400"/>
+    </linearGradient>
+  </defs>
+
+  <!-- handles -->
+  <path d="M26 30 C10 32 8 52 22 62 C28 66 34 66 38 64"
+        fill="none" stroke="#1a1a1a" stroke-width="11" stroke-linecap="round"/>
+  <path d="M26 30 C10 32 8 52 22 62 C28 66 34 66 38 64"
+        fill="none" stroke="url(#goldDark)" stroke-width="6" stroke-linecap="round"/>
+  <path d="M102 30 C118 32 120 52 106 62 C100 66 94 66 90 64"
+        fill="none" stroke="#1a1a1a" stroke-width="11" stroke-linecap="round"/>
+  <path d="M102 30 C118 32 120 52 106 62 C100 66 94 66 90 64"
+        fill="none" stroke="url(#goldDark)" stroke-width="6" stroke-linecap="round"/>
+
+  <!-- stem -->
+  <rect x="57" y="76" width="14" height="18" fill="#1a1a1a"/>
+  <rect x="59" y="76" width="10" height="18" fill="url(#goldDark)"/>
+
+  <!-- base -->
+  <rect x="38" y="92" width="52" height="14" rx="3" fill="#1a1a1a"/>
+  <rect x="40" y="93" width="48" height="11" rx="2" fill="url(#goldDark)"/>
+  <rect x="30" y="104" width="68" height="15" rx="3" fill="#1a1a1a"/>
+  <rect x="32" y="105" width="64" height="12" rx="2" fill="url(#gold)"/>
+
+  <!-- cup -->
+  <path d="M28 16 H100 V46 C100 66 84 80 64 80 C44 80 28 66 28 46 Z"
+        fill="#1a1a1a"/>
+  <path d="M32 20 H96 V46 C96 63 82 75 64 75 C46 75 32 63 32 46 Z"
+        fill="url(#gold)"/>
+
+  <!-- cup shading -->
+  <path d="M32 20 H52 V75 C43 72 32 61 32 46 Z" fill="#ffffff" opacity="0.28"/>
+
+  <!-- rim -->
+  <rect x="24" y="10" width="80" height="14" rx="4" fill="#1a1a1a"/>
+  <rect x="27" y="12" width="74" height="10" rx="2" fill="url(#gold)"/>
+
+  <!-- star -->
+  <path d="M64 34 L69.5 47 L83 47.5 L72.5 56 L76 69 L64 61.5 L52 69 L55.5 56 L45 47.5 L58.5 47 Z"
+        fill="#1a1a1a" opacity="0.85"/>
+  <path d="M64 38 L68 48 L78.5 48.5 L70.5 55 L73.5 65 L64 59.5 L54.5 65 L57.5 55 L49.5 48.5 L60 48 Z"
+        fill="#fff6d0"/>
+</svg>
