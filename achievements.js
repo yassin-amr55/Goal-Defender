@@ -81,7 +81,7 @@
         { id: 'score_25', cat: 'Score', name: 'Getting Serious', desc: 'Score 25 in a single run', metric: 'highScore', goal: 25, reward: 150 },
         { id: 'score_50', cat: 'Score', name: 'High Fifty', desc: 'Score 50 in a single run', metric: 'highScore', goal: 50, reward: 400 },
         { id: 'score_100', cat: 'Score', name: 'Century', desc: 'Score 100 in a single run', metric: 'highScore', goal: 100, reward: 4000 },
-        { id: 'score_250', cat: 'Score', name: 'Unstoppable', desc: 'Score 250 in a single run', metric: 'highScore', goal: 250, reward: 20000 },
+        { id: 'score_250', cat: 'Score', name: 'Unstoppable', desc: 'Score 250 in a single run', metric: 'highScore', goal: 250, reward: 50000 },
 
         /* --- Tournament --- */
         { id: 'tourn_played', cat: 'Tournament', name: 'Entering the Cup', desc: 'Start your first tournament', metric: 'tournamentsPlayed', goal: 1, reward: 50 },
