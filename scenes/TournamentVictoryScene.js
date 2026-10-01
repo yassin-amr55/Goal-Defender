@@ -1,3 +1,9 @@
+/* Paid every time a cup is won, on top of the per-match earnings.
+ * Keyed by tournament mode so a single table drives both cups.
+ * DO NOT reduce these without rebalancing ball prices against them - the
+ * whole point of the prize is that Champions is worth chasing. */
+const GD_TROPHY_PRIZE = { qualifiers: 500, champions: 10000 };
+
 class TournamentVictoryScene extends Phaser.Scene {
     constructor() {
         super({ key: 'TournamentVictoryScene' });
@@ -30,7 +36,17 @@ class TournamentVictoryScene extends Phaser.Scene {
 
             this.add.text(640, 360, `Matches Won: ${this.stats.matchesWon || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
             this.add.text(640, 400, `Total Deflects: ${this.stats.totalDeflects || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
-            this.add.text(640, 440, `Money Earned: ${this.stats.moneyEarned || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
+            this.add.text(640, 440, `Match Earnings: $${this.stats.moneyEarned || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
+
+            // Trophy prize is separate from match earnings, so it gets its own
+            // line. Label it as "+" because awardTrophy() pays it out shortly
+            // after this screen appears.
+            const prize = GD_TROPHY_PRIZE[this.mode] || 0;
+            if (prize > 0) {
+                this.add.text(640, 484, `Trophy Prize: +$${prize.toLocaleString('en-US')}`, {
+                    fontSize: '26px', fill: '#ffd700', fontStyle: '900'
+                }).setOrigin(0.5);
+            }
 
             // Award trophy count and save
             this.time.delayedCall(1200, () => this.awardTrophy(), [], this);
@@ -80,6 +96,15 @@ class TournamentVictoryScene extends Phaser.Scene {
     awardTrophy() {
         // Only award trophy if victory
         if (this.result === 'victory') {
+            // Trophy prize: paid on every win, unlike the achievements which
+            // are first-win-only. Guarded by result === 'victory' above so a
+            // defeat can never pay out.
+            const prize = GD_TROPHY_PRIZE[this.mode] || 0;
+            if (prize > 0) {
+                const balance = parseInt(localStorage.getItem('goalDefenderMoney') || '0');
+                localStorage.setItem('goalDefenderMoney', String(balance + prize));
+            }
+
             if (this.mode === 'qualifiers') {
                 const count = parseInt(localStorage.getItem('tournamentQualifiersWinCount') || '0');
                 localStorage.setItem('tournamentQualifiersWinCount', (count + 1).toString());

@@ -300,14 +300,22 @@
                 finals: 50
             },
             champions: {
-                roundOf32: 30,
-                roundOf16: 40,
-                quarterFinals: 50,
-                semiFinals: 60,
-                finals: 70
+                roundOf32: 60,
+                roundOf16: 70,
+                quarterFinals: 80,
+                semiFinals: 90,
+                finals: 100
             }
         };
         return (map[mode] && map[mode][round]) || 20;
+    }
+
+    /** Money paid per point of score, by cup.
+     *  Champions pays double Qualifiers: it is a 5-round bracket with
+     *  higher targets, so match earnings have to justify the effort.
+     *  Stated once here so the rate is not duplicated. */
+    getScoreRate() {
+        return this.mode === 'champions' ? 10 : 5;
     }
 
     createSounds() {
@@ -628,8 +636,10 @@
         // Fade screen to black (same as infinite mode)
         this.cameras.main.fadeOut(1000, 0, 0, 0);
 
-        // Award money at $3 per deflection
-        const money = this.score * 3;
+        // Award money per score. The rate depends on the cup: Qualifiers pay
+        // half what Champions does, so the harder bracket is worth the extra
+        // effort. Endless mode and the tutorial keep their own separate rates.
+        const money = this.score * this.getScoreRate();
         const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || '0');
         localStorage.setItem('goalDefenderMoney', (currentMoney + money).toString());
 

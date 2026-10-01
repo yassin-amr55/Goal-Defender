@@ -59,9 +59,9 @@
     var LIST = [
         /* --- Deflections --- */
         { id: 'defl_50', cat: 'Deflections', name: 'Warmed Up', desc: 'Deflect 50 balls in total', metric: 'deflections', goal: 50, reward: 50 },
-        { id: 'defl_100', cat: 'Deflections', name: 'Steady Hands', desc: 'Deflect 100 balls in total', metric: 'deflections', goal: 100, reward: 150 },
-        { id: 'defl_200', cat: 'Deflections', name: 'Double Century', desc: 'Deflect 200 balls in total', metric: 'deflections', goal: 200, reward: 500 },
-        { id: 'defl_500', cat: 'Deflections', name: 'Five Hundred Club', desc: 'Deflect 500 balls in total', metric: 'deflections', goal: 500, reward: 1200 },
+        { id: 'defl_100', cat: 'Deflections', name: 'Steady Hands', desc: 'Deflect 100 balls in total', metric: 'deflections', goal: 100, reward: 100 },
+        { id: 'defl_200', cat: 'Deflections', name: 'Double Century', desc: 'Deflect 200 balls in total', metric: 'deflections', goal: 200, reward: 300 },
+        { id: 'defl_500', cat: 'Deflections', name: 'Five Hundred Club', desc: 'Deflect 500 balls in total', metric: 'deflections', goal: 500, reward: 600 },
         { id: 'defl_1000', cat: 'Deflections', name: 'Four Figures', desc: 'Deflect 1,000 balls in total', metric: 'deflections', goal: 1000, reward: 3000 },
         { id: 'defl_10000', cat: 'Deflections', name: 'Five Figures', desc: 'Deflect 10,000 balls in total', metric: 'deflections', goal: 10000, reward: 100000 },
         { id: 'defl_50000', cat: 'Deflections', name: 'Fifty Thousand', desc: 'Deflect 50,000 balls in total', metric: 'deflections', goal: 50000, reward: 500000 },
@@ -70,23 +70,27 @@
 
         /* --- Speed boost --- */
         { id: 'spd_25', cat: 'Speed', name: 'Bit of a Pace', desc: 'Reach a 25% speed boost', metric: 'maxSpeed', goal: 25, reward: 20 },
-        { id: 'spd_50', cat: 'Speed', name: 'Picking Up', desc: 'Reach a 50% speed boost', metric: 'maxSpeed', goal: 50, reward: 100 },
-        { id: 'spd_100', cat: 'Speed', name: 'Double Speed', desc: 'Reach a 100% speed boost', metric: 'maxSpeed', goal: 100, reward: 200 },
+        { id: 'spd_50', cat: 'Speed', name: 'Picking Up', desc: 'Reach a 50% speed boost', metric: 'maxSpeed', goal: 50, reward: 75 },
+        { id: 'spd_100', cat: 'Speed', name: 'Double Speed', desc: 'Reach a 100% speed boost', metric: 'maxSpeed', goal: 100, reward: 150 },
         { id: 'spd_200', cat: 'Speed', name: 'Double Again', desc: 'Reach a 200% speed boost', metric: 'maxSpeed', goal: 200, reward: 1200 },
         { id: 'spd_210', cat: 'Speed', name: 'Spark Ceiling', desc: 'Reach 210% - the Spark Ball limit', metric: 'maxSpeed', goal: 210, reward: 6000 },
         { id: 'spd_300', cat: 'Speed', name: 'Terminal Velocity', desc: 'Reach the 300% speed boost cap', metric: 'maxSpeed', goal: 300, reward: 15000 },
 
         /* --- Single run score --- */
         { id: 'score_10', cat: 'Score', name: 'First Ten', desc: 'Score 10 in a single run', metric: 'highScore', goal: 10, reward: 50 },
-        { id: 'score_25', cat: 'Score', name: 'Getting Serious', desc: 'Score 25 in a single run', metric: 'highScore', goal: 25, reward: 150 },
-        { id: 'score_50', cat: 'Score', name: 'High Fifty', desc: 'Score 50 in a single run', metric: 'highScore', goal: 50, reward: 400 },
+        { id: 'score_25', cat: 'Score', name: 'Getting Serious', desc: 'Score 25 in a single run', metric: 'highScore', goal: 25, reward: 100 },
+        { id: 'score_50', cat: 'Score', name: 'High Fifty', desc: 'Score 50 in a single run', metric: 'highScore', goal: 50, reward: 250 },
         { id: 'score_100', cat: 'Score', name: 'Century', desc: 'Score 100 in a single run', metric: 'highScore', goal: 100, reward: 4000 },
         { id: 'score_250', cat: 'Score', name: 'Unstoppable', desc: 'Score 250 in a single run', metric: 'highScore', goal: 250, reward: 50000 },
 
         /* --- Tournament --- */
         { id: 'tourn_played', cat: 'Tournament', name: 'Entering the Cup', desc: 'Start your first tournament', metric: 'tournamentsPlayed', goal: 1, reward: 50 },
-        { id: 'tourn_qual', cat: 'Tournament', name: 'Qualifiers Champion', desc: 'Win the Qualifiers Cup', metric: 'qualifiersWins', goal: 1, reward: 600 },
-        { id: 'tourn_champ', cat: 'Tournament', name: 'Champions of Champions', desc: 'Win the Champions Cup', metric: 'championsWins', goal: 1, reward: 15000 },
+        // tourn_qual / tourn_champ are FIRST-win-only (goal: 1).
+        // Winning a cup ALSO pays a per-win trophy prize from
+        // TournamentVictoryScene ($500 Qualifiers / $10,000 Champions), so these
+        // sit below the repeat prize rather than replacing it.
+        { id: 'tourn_qual', cat: 'Tournament', name: 'Qualifiers Champion', desc: 'Win the Qualifiers Cup', metric: 'qualifiersWins', goal: 1, reward: 300 },
+        { id: 'tourn_champ', cat: 'Tournament', name: 'Champions of Champions', desc: 'Win the Champions Cup', metric: 'championsWins', goal: 1, reward: 5000 },
         { id: 'tourn_3', cat: 'Tournament', name: 'Hat Trick', desc: 'Win 3 tournaments', metric: 'tournamentWins', goal: 3, reward: 3000 },
         { id: 'tourn_10', cat: 'Tournament', name: 'Tournament Machine', desc: 'Win 10 tournaments', metric: 'tournamentWins', goal: 10, reward: 60000 },
 

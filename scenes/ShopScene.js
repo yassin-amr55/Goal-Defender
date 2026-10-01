@@ -63,17 +63,17 @@
         this.ballData = [
             { id: 'default', name: 'Default Ball', price: 0, ability: 'None', texture: 'ball_default' },
             { id: 'golden', name: 'Golden Ball', price: 150, ability: 'Hitbox shrinks 15% slower', texture: 'ball_golden' },
-            { id: 'steel', name: 'Steel Ball', price: 300, ability: 'Ball moves 10% slower', texture: 'ball_steel' },
-            { id: 'rubber', name: 'Rubber Ball', price: 1200, ability: 'Bounces 25% higher', texture: 'ball_rubber' },
-            { id: 'ice', name: 'Ice Ball', price: 1500, ability: 'Hitbox shrinks 50% slower', texture: 'ball_ice' },
-            { id: 'anchor', name: 'Anchor Ball', price: 2000, ability: 'Ball moves 50% slower', texture: 'ball_anchor' },
-            { id: 'fire', name: 'Fire Ball', price: 3000, ability: '+2 score per deflect', texture: 'ball_fire' },
-            { id: 'neon', name: 'Neon Ball', price: 5000, ability: 'Speed boost +8% per hit', texture: 'ball_neon' },
-            { id: 'ghost', name: 'Ghost Ball', price: 5250, ability: 'Min hitbox 130% of ball', texture: 'ball_ghost' },
-            { id: 'spark', name: 'Spark Ball', price: 7500, ability: 'Max speed 210%', texture: 'ball_spark' },
-            { id: 'candy', name: 'Candy Ball', price: 8000, ability: '+3 score per deflect', texture: 'ball_candy' },
-            { id: 'void', name: 'Void Ball', price: 20000, ability: 'Hitbox starts min, max speed 170%', texture: 'ball_void' },
-            { id: 'gauntlet', name: 'Gauntlet Ball', price: 500000, ability: 'Hitbox 170%, max speed 100%, +5 score', texture: 'ball_gauntlet' }
+            { id: 'steel', name: 'Steel Ball', price: 900, ability: 'Ball moves 10% slower', texture: 'ball_steel' },
+            { id: 'rubber', name: 'Rubber Ball', price: 3600, ability: 'Bounces 25% higher', texture: 'ball_rubber' },
+            { id: 'ice', name: 'Ice Ball', price: 4500, ability: 'Hitbox shrinks 50% slower', texture: 'ball_ice' },
+            { id: 'anchor', name: 'Anchor Ball', price: 6000, ability: 'Ball moves 50% slower', texture: 'ball_anchor' },
+            { id: 'fire', name: 'Fire Ball', price: 9000, ability: '+2 score per deflect', texture: 'ball_fire' },
+            { id: 'neon', name: 'Neon Ball', price: 15000, ability: 'Speed boost +8% per hit', texture: 'ball_neon' },
+            { id: 'ghost', name: 'Ghost Ball', price: 15750, ability: 'Min hitbox 130% of ball', texture: 'ball_ghost' },
+            { id: 'spark', name: 'Spark Ball', price: 22500, ability: 'Max speed 210%', texture: 'ball_spark' },
+            { id: 'candy', name: 'Candy Ball', price: 24000, ability: '+3 score per deflect', texture: 'ball_candy' },
+            { id: 'void', name: 'Void Ball', price: 60000, ability: 'Hitbox starts min, max speed 170%', texture: 'ball_void' },
+            { id: 'gauntlet', name: 'Gauntlet Ball', price: 1500000, ability: 'Hitbox 170%, max speed 100%, +5 score', texture: 'ball_gauntlet' }
         ];
 
         // Back + page navigation. Created before the grid, because renderPage()
