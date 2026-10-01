@@ -13,6 +13,12 @@
 
     var FAMILY = '"Nunito", "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif';
 
+    /* Single source of truth for the version string.
+     *
+     * This used to be hardcoded as 'V2.0' in MenuScene and was still saying
+     * V2.0 after v2.1 had shipped. Bump it here and every label follows. */
+    var VERSION = 'V2.1';
+
     /* ---------------- font ---------------- */
 
     function installFont() {
@@ -336,6 +342,7 @@
 
     window.UI = {
         FAMILY: FAMILY,
+        VERSION: VERSION,
         installFont: installFont,
         shade: shade,
         drawPanel: drawPanel,

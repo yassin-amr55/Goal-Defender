@@ -173,7 +173,7 @@
 
         /* ---------------- version ---------------- */
 
-        this.add.text(1256, 692, 'V2.0', {
+        this.add.text(1256, 692, UI.VERSION, {
             fontSize: '19px',
             fontFamily: UI.FAMILY,
             fontStyle: '800',
