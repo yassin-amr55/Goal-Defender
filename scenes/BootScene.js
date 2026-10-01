@@ -26,7 +26,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('grass', 'assets/grass.png');
         this.load.image('ball_default', 'assets/ball.png');
         this.load.image('goal', 'assets/goal.png');
-        this.load.image('wall', 'assets/wall.png');
+        this.load.image('wall', 'assets/new-wall.png');
         
         // PHASE 10: Ball skins
         this.load.image('ball_golden', 'assets/balls/ball-golden.png');

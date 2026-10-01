@@ -216,10 +216,19 @@
         if (this.textures.exists('wall')) {
             this.wall = this.physics.add.sprite(1200, groundY - groundHeight, 'wall');
             this.wall.setOrigin(0.5, 1); // Anchor to bottom
+
+            // The new wall art is 261x899. Scaled to the height the old
+            // 100x500 wall occupied, so the playfield footprint is unchanged.
+            // refreshBody() is required: without it the physics body keeps the
+            // unscaled size and the ball would bounce 179px above the art.
+            this.wall.setScale(500 / this.wall.texture.getSourceImage().height);
+            this.wall.refreshBody();
+
             this.wall.setImmovable(true);
             this.wall.body.setAllowGravity(false);
-            console.log('Wall added');
-            
+            console.log('Wall added at', this.wall.displayWidth + 'x' + this.wall.displayHeight,
+                'body', this.wall.body.width + 'x' + this.wall.body.height);
+
             // PHASE 3: Add collision with wall → bounce
             this.physics.add.collider(this.ball, this.wall, this.onWallHit, null, this);
         } else {
