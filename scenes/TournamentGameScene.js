@@ -168,7 +168,14 @@
         // Score setup
         this.score = 0;
         this.speedBoost = 0;
+        // Deflections made in this match. totalDeflects mirrors it for the
+        // result screen; both are driven from onBallClick() so wall bounces
+        // can never be counted as player deflections.
+        this.runDeflections = 0;
         this.totalDeflects = 0;
+        // How many of this match's deflections have already been added to the
+        // lifetime total, so a re-entry mid-match cannot double-count.
+        this.tournamentDeflectionsBanked = 0;
         this.requiredScore = this.getRequiredScore(this.mode, this.currentRound);
         this.gameOver = false;
         
@@ -425,6 +432,28 @@
         const scoreGain = Math.round(this.scoreMultiplier);
         this.score += scoreGain;
         this.runDeflections = (this.runDeflections || 0) + 1;
+        // Result-screen figure. Counts only what the player actually deflected.
+        this.totalDeflects = this.runDeflections;
+
+        // Tournament deflections count toward the same lifetime total as
+        // infinite mode, and are banked HERE rather than at the end of the
+        // match. The end-of-match banking only ran on a victory, so every
+        // deflect in a lost or abandoned tournament was thrown away even
+        // though the player had genuinely made them.
+        //
+        // Counted off runDeflections, not score: score is a scoring figure and
+        // this is an activity count, and coupling them would let a future ball
+        // multiplier inflate a stat that achievements read literally.
+        const banked = this.tournamentDeflectionsBanked || 0;
+        const bankNow = this.runDeflections;
+        if (bankNow > banked) {
+            const lifetime = parseInt(
+                localStorage.getItem('goalDefenderDeflections') || '0');
+            localStorage.setItem(
+                'goalDefenderDeflections', (lifetime + (bankNow - banked)).toString());
+            this.tournamentDeflectionsBanked = bankNow;
+        }
+
         this.scoreText.setText(`Score: ${this.score} / ${this.requiredScore}`);
         this.speedBoostText.setText(`Speed Boost: ${this.speedBoost}%`);
         
@@ -482,10 +511,12 @@
             // Reverse horizontal direction with current ball speed
             this.ball.setVelocity(-this.ballSpeed, newVerticalVelocity);
             this.playBounceSound();
-            
-            // Increment total deflects counter for stats
-            this.totalDeflects++;
-            
+
+            // No deflect counter here. The ball bouncing off the barrier is not
+            // something the player did, and counting it inflated the
+            // tournament's deflect total - which is the figure shown on the
+            // result screen. Player deflections are counted in onBallClick().
+
             console.log('Ball bounced back with velocity:', this.ball.body.velocity.x, this.ball.body.velocity.y);
         }
     }
@@ -662,9 +693,9 @@
         const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || '0');
         localStorage.setItem('goalDefenderMoney', (currentMoney + money).toString());
 
-        // Bank the deflections toward the lifetime total
-        const lifetime = parseInt(localStorage.getItem('goalDefenderDeflections') || '0');
-        localStorage.setItem('goalDefenderDeflections', lifetime + this.score);
+        // Lifetime deflections are banked per deflect in onBallClick(), so
+        // nothing is added here. This used to bank this.score on victory only,
+        // which dropped every deflect from a lost match.
 
         // Update tournamentProgress
         const progress = JSON.parse(localStorage.getItem('tournamentProgress') || '{}');

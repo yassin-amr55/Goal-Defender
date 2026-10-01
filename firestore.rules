@@ -8,41 +8,24 @@ rules_version = '2';
 // visitor and a leaderboard full of 999,999,999 scores. Do not deploy with the
 // default test-mode rules open, and do not switch these to `allow read, write`.
 //
-// The client (player.js) already refuses to submit implausible values and
-// only writes when a score improves. These rules repeat both checks because
-// client-side checks are a courtesy, not a defence - anyone can call
+// The client (player.js / account.js) already refuses implausible values and
+// only writes on improvement. These rules repeat those checks, because a
+// client-side check is a courtesy, not a defence - anyone can call
 // firebase.firestore() directly from the console.
+//
+// Layout note: shared helpers are declared ABOVE both match blocks so their
+// scope is unambiguous. Firestore scopes functions lexically, and relying on a
+// declaration that appears later is not something to bet a database on.
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Reads are public: anyone may view the leaderboard.
-    // Writes are locked down per player below.
-    match /players/{playerId} {
+    /* ---------------- shared helpers ---------------- */
 
-      // A document's size is a hard ceiling on what a single player can store.
-      allow read: if true;
-      allow create: if isOwner(playerId)
-                    && validFields()
-                    && validSize();
-      allow update: if isOwner(playerId)
-                    && validFields()
-                    && validSize();
-      allow delete: if false;   // players are never removed by the client
-    }
-
-    // Only the signed-in owner may write their own document. Anonymous auth
-    // gives every visitor a uid, so this still stops one player editing
+    // Only the signed-in owner may touch their own document. Anonymous auth
+    // gives every visitor a uid, so this already stops one player editing
     // another's row without needing accounts or email.
-    function isOwner(playerId) {
-      return request.auth != null && request.auth.uid == playerId;
-    }
-
-    // Reject any document carrying fields the game does not write. This stops
-    // junk such as a "score" object nested inside the record.
-    function validFields() {
-      return request.resource.data.keys().hasOnly([
-        'name', 'highScore', 'deflections', 'trophies', 'updatedAt'
-      ]);
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
     }
 
     function isInt(v) {
@@ -53,18 +36,66 @@ service cloud.firestore {
       return isInt(v) && v >= lo && v <= hi;
     }
 
-    // Ranges are generous but not absurd:
-    //   highScore   - a very long single run
-    //   deflections - long-term career total
-    //   trophies    - hundreds of cup wins
-    // name is capped so a player cannot stuff a paragraph into the board.
-    function validSize() {
-      return within(request.resource.data.highScore, 0, 1000000)
-        && within(request.resource.data.deflections, 0, 100000000)
-        && within(request.resource.data.trophies, 0, 9999)
-        && request.resource.data.name is string
-        && request.resource.data.name.size() >= 1
-        && request.resource.data.name.size() <= 14;
+    /* ---------------- accounts (Part 8) ----------------
+     *
+     * A player's save is PRIVATE: nobody reads it, not even other players.
+     * Not even the leaderboard can see it. Writes are owner-only, and the save
+     * map is capped so an account document cannot be used as free storage. */
+    match /accounts/{uid} {
+      allow read:   if isOwner(uid);
+      allow create: if isOwner(uid) && validAccount();
+      allow update: if isOwner(uid) && validAccount();
+      allow delete: if false;
+
+      function validAccount() {
+        return request.resource.data.keys().hasOnly([
+          'username', 'email', 'save', 'createdAt', 'updatedAt', 'lastLogin'
+        ])
+        && request.resource.data.username is string
+        && request.resource.data.username.size() >= 1
+        && request.resource.data.username.size() <= 14
+        && request.resource.data.save is map
+        && request.resource.data.save.size() <= 20;
+      }
+    }
+
+    /* ---------------- leaderboard players (Part 6) ----------------
+     *
+     * Reads are PUBLIC so anyone can view the board. Writes are locked down
+     * per player, and the numeric ranges are deliberately generous but not
+     * absurd. The name is capped so a player cannot stuff a paragraph into the
+     * board. */
+    match /players/{playerId} {
+      allow read: if true;
+      allow create: if isOwner(playerId)
+                    && validFields()
+                    && validSize();
+      allow update: if isOwner(playerId)
+                    && validFields()
+                    && validSize();
+      allow delete: if false;   // rows are never removed by the client
+
+      // Reject any document carrying fields the game does not write. This stops
+      // junk such as a nested object smuggled in alongside the score.
+      function validFields() {
+        return request.resource.data.keys().hasOnly([
+          'name', 'highScore', 'deflections', 'trophies', 'updatedAt'
+        ]);
+      }
+
+      function validSize() {
+        return within(request.resource.data.highScore, 0, 1000000)
+          && within(request.resource.data.deflections, 0, 100000000)
+          && within(request.resource.data.trophies, 0, 9999)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() >= 1
+          && request.resource.data.name.size() <= 14;
+      }
+    }
+
+    // Anything not matched above is denied by default.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

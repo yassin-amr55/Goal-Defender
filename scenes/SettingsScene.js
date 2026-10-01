@@ -64,22 +64,25 @@
         this.addToggleRow(348, 'Always Show Hitbox', 'gdHitboxAlways', 'Show the clickable area even when not clickable');
         this.addToggleRow(430, 'Sound', 'gdMuted', 'Mute or unmute all game sounds', true);
 
-        /* ---------------- player name ---------------- */
-        // Inside the panel, above the BACK button. Changing it re-opens the same
-        // prompt used on first launch, so name validation lives in one place.
-        const currentName = window.GDPlayer ? window.GDPlayer.getName() : 'PLAYER';
-        this.add.text(640, 500, 'PLAYER NAME', {
-            fontSize: '15px', color: '#8fa6bd', fontStyle: '800'
-        }).setOrigin(0.5);
+        /* ---------------- player name ----------------
+         * Hidden while signed in: the account owns the name then, and it is
+         * changed from the account page (throttled to once a week). */
+        const account = window.GDAccount;
+        if (!account || !account.isSignedIn()) {
+            const currentName = window.GDPlayer ? window.GDPlayer.getName() : 'PLAYER';
+            this.add.text(640, 500, 'PLAYER NAME', {
+                fontSize: '15px', color: '#8fa6bd', fontStyle: '800'
+            }).setOrigin(0.5);
 
-        UI.button(this, {
-            x: 640, y: 532, w: 320, h: 46,
-            label: currentName, textSize: 19,
-            fillTop: 0x4a90c4, fillBottom: 0x2f6b9c, radius: 14,
-            onClick: () => this.scene.start('NamePromptScene', {
-                next: 'SettingsScene', current: currentName
-            })
-        });
+            UI.button(this, {
+                x: 640, y: 532, w: 320, h: 46,
+                label: currentName, textSize: 19,
+                fillTop: 0x4a90c4, fillBottom: 0x2f6b9c, radius: 14,
+                onClick: () => this.scene.start('NamePromptScene', {
+                    next: 'SettingsScene', current: currentName
+                })
+            });
+        }
 
         // Back button, clear of the panel edge (panel bottom is y=570)
         UI.button(this, {

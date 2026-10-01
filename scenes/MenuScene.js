@@ -138,6 +138,19 @@
             onClick: () => this.scene.start('LeaderboardScene')
         });
 
+        /* ---------------- account (top right, under settings + mute) --------
+         * Text only with an outline, no filled background.
+         *
+         * Anchored at x=1244 with origin (1, 0.5) so it grows leftwards and can
+         * never run off the right edge. The previous filled button at x=1236
+         * with w=170 spanned out to 1321, past the 1280 canvas. */
+        const signedIn = window.GDAccount && window.GDAccount.isSignedIn();
+        this.accountLabel = this.makeAccountText(
+            signedIn ? (window.GDAccount.username() || 'player') : 'SIGN IN',
+            signedIn ? '#ffd45e' : '#ffffff'
+        );
+        this.accountLabel.on('pointerdown', () => this.scene.start('AccountScene'));
+
         /* ---------------- floating ball ---------------- */
 
         const equippedBall = localStorage.getItem('goalDefenderEquippedBall') || 'default';
@@ -195,7 +208,82 @@
         // Publish to the leaderboard. Fire-and-forget: submit() swallows its
         // own failures and returns a promise nobody awaits, so the menu never
         // waits on the network.
-        if (window.GDPlayer) window.GDPlayer.submit();
+        //
+        // ?noleaderboard suppresses the write. That is how screenshots and QA
+        // are taken without planting fake entries on the public board.
+        if (window.GDPlayer && !/[?&]noleaderboard\b/.test(location.search)) {
+            window.GDPlayer.submit();
+        }
+
+        // Push any local progress to the signed-in account. Debounced, so
+        // bouncing through the menu does not hammer Firestore.
+        if (window.GDAccount && window.GDAccount.isSignedIn()) {
+            window.GDAccount.scheduleSync();
+        }
+
+        // Keep the top-right slot correct when signing in or out.
+        // Registered ONCE ever. Previously this ran inside create(), so every
+        // rebuild added another listener and refreshAccountSlot fired N times,
+        // which left stray labels stacked on the menu.
+        if (window.GDAccount && !MenuScene._accountHooked) {
+            MenuScene._accountHooked = true;
+            window.GDAccount.onChange(() => {
+                const s = window.game && window.game.scene.getScene('MenuScene');
+                if (s && s.scene.isActive()) s.refreshAccountSlot();
+            });
+        }
+    }
+
+    /* Outlined text control for the account slot: no background, just a bright
+     * fill with a dark outline so it reads clearly over the stadium art. */
+    makeAccountText(text, color) {
+        const t = this.add.text(1244, 96, text, {
+            fontSize: '21px',
+            color: color,
+            fontFamily: UI.FAMILY,
+            fontStyle: '900',
+            stroke: '#0b1220',
+            strokeThickness: 7
+        }).setOrigin(1, 0.5).setDepth(50);
+
+        // A soft second outline underneath, which reads as a glow and keeps
+        // the label legible against both the sky and the dark stands.
+        const glow = this.add.text(1244, 96, text, {
+            fontSize: '21px',
+            color: color,
+            fontFamily: UI.FAMILY,
+            fontStyle: '900',
+            stroke: color,
+            strokeThickness: 12,
+            fillAlpha: 0.16
+        }).setOrigin(1, 0.5).setDepth(49);
+
+        t.setInteractive({ useHandCursor: true });
+        t.on('pointerover', () => { t.setScale(1.08); });
+        t.on('pointerout', () => { t.setScale(1); });
+
+        t.gdGlow = glow;
+        return t;
+    }
+
+    /* Swap the account text between SIGN IN and the username.
+     *
+     * Updates the EXISTING label rather than destroying and rebuilding it.
+     * Rebuilding left an orphaned label behind whenever create() ran more than
+     * once, which is what produced two overlapping texts on the menu and a
+     * SIGN IN that refused to disappear. */
+    refreshAccountSlot() {
+        const A = window.GDAccount;
+        if (!A || !this.accountLabel) return;
+        const signedIn = A.isSignedIn();
+        const text = signedIn ? (A.username() || 'player') : 'SIGN IN';
+        const color = signedIn ? '#ffd45e' : '#ffffff';
+        this.accountLabel.setText(text);
+        this.accountLabel.setColor(color);
+        if (this.accountLabel.gdGlow) {
+            this.accountLabel.gdGlow.setText(text);
+            this.accountLabel.gdGlow.setColor(color);
+        }
     }
 
     getBallTexture(ballId) {

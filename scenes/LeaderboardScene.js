@@ -96,13 +96,16 @@ class LeaderboardScene extends Phaser.Scene {
             if (!this.pointerDown) return;
             const d = p.y - this.dragStart;
             if (Math.abs(d) > 6) this.moved = true;
+            // Drag: finger down (d > 0) reveals earlier entries, so the offset falls.
             this.scroll = this.clampScroll(this.scrollStart - d);
         });
         this.input.on('pointerup', () => { this.pointerDown = false; });
 
-        // Wheel support for desktop.
+        // Wheel support for desktop. dy > 0 means "scroll down", which should move
+        // toward LATER entries, i.e. increase the offset. This was inverted,
+        // so wheeling down scrolled up and vice versa.
         this.input.on('wheel', (p, objs, dx, dy) => {
-            this.scroll = this.clampScroll(this.scroll + (dy > 0 ? -40 : 40));
+            this.scroll = this.clampScroll(this.scroll + (dy > 0 ? 40 : -40));
         });
 
         this.maxScroll = 0;

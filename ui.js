@@ -63,6 +63,23 @@
         return (r << 16) | (g << 8) | b;
     }
 
+    /* Gloss band across the top of a rounded shape.
+     *
+     * The corner radius MUST be clamped to half the band height. Passing the
+     * button's full radius here overflowed: on a pill-shaped chip (radius =
+     * height/2 = 31) the band is only ~21px tall, so a radius larger than the
+     * band's half-height spilled pale corners outside the button, which read as
+     * a semi-transparent shape floating behind the chip.
+     *
+     * The band is also inset horizontally so it can never cross the border. */
+    function sheenRect(g, x, y, w, h, radius, alpha) {
+        var bandH = h * 0.34;
+        var r = Math.min(radius, bandH / 2);
+        var inset = Math.max(r, radius * 0.35);
+        g.fillStyle(0xffffff, alpha);
+        g.fillRoundedRect(x + inset, y + 3, Math.max(1, w - inset * 2), bandH, r);
+    }
+
     /* ---------------- rounded rect drawing ---------------- */
 
     // Draws a rounded rectangle with a vertical gradient, a soft top highlight
@@ -89,10 +106,7 @@
         g.fillRoundedRect(left, top, w, h, radius);
 
         // Top sheen
-        if (gloss > 0) {
-            g.fillStyle(0xffffff, gloss);
-            g.fillRoundedRect(left + radius * 0.7, top + 3, w - radius * 1.4, h * 0.34, radius * 0.6);
-        }
+        if (gloss > 0) sheenRect(g, left, top, w, h, radius, gloss);
 
         // Border
         if (borderWidth > 0) {
@@ -167,11 +181,10 @@
             g.fillStyle(top, 1);
             g.fillRoundedRect(-w / 2, -h / 2, w, h, radius);
             if (sheen > 0) {
-                // Follow the button's own corner radius. Insetting the sheen
-                // horizontally left a grey slab floating inside a pill-shaped
-                // chip (the BEST score button), which read as a rendering bug.
-                g.fillStyle(0xffffff, sheen);
-                g.fillRoundedRect(-w / 2, -h / 2 + 3, w, h * 0.34, radius);
+                // sheenRect clamps the radius to half the band height. Passing
+                // the button's own radius here made the gloss spill outside a
+                // pill-shaped button.
+                sheenRect(g, -w / 2, -h / 2, w, h, radius, sheen);
             }
             if (borderColor) {
                 g.lineStyle(3, borderColor, 1);
