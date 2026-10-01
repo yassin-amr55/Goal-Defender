@@ -231,15 +231,25 @@
 
             // The new wall art is 261x899. Scaled to the height the old
             // 100x500 wall occupied, so the playfield footprint is unchanged.
-            // refreshBody() is required: without it the physics body keeps the
-            // unscaled size and the ball would bounce 179px above the art.
             this.wall.setScale(500 / this.wall.texture.getSourceImage().height);
             this.wall.refreshBody();
 
+            // The art has transparent margins down BOTH sides: measuring its
+            // alpha shows the solid face runs from source column ~19.6 to
+            // ~241.1, not 0 to 261. A body spanning the full image made the
+            // ball bounce ~11px short of the visible wall, so the body is
+            // narrowed to the solid band and offset onto it.
+            const wallSrc = this.wall.texture.getSourceImage();
+            const solidLeft = wallSrc.width * 0.0751;   // 19.6 of 261
+            const solidRight = wallSrc.width * 0.9238;  // 241.1 of 261
+            this.wall.body.setSize(solidRight - solidLeft, wallSrc.height, false);
+            this.wall.body.setOffset(solidLeft, 0);
+
             this.wall.setImmovable(true);
             this.wall.body.setAllowGravity(false);
-            console.log('Wall added at', this.wall.displayWidth + 'x' + this.wall.displayHeight,
-                'body', this.wall.body.width + 'x' + this.wall.body.height);
+            console.log('Wall art', wallSrc.width + 'x' + wallSrc.height,
+                '| solid band', Math.round(solidRight - solidLeft) + 'px',
+                '| body at', Math.round(this.wall.body.left) + '..' + Math.round(this.wall.body.right));
 
             // PHASE 3: Add collision with wall → bounce
             this.physics.add.collider(this.ball, this.wall, this.onWallHit, null, this);
