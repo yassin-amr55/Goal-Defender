@@ -248,12 +248,17 @@ function getAudioContext() {
     /** Move the loading overlay so it exactly covers the presented canvas,
      *  rotation included. Without this it stayed axis-aligned to the window
      *  while the game turned 90 degrees on a phone, so the spinner appeared
-     *  sideways outside the play area. */
+     *  sideways outside the play area.
+     *
+     *  Deliberately does NOT require the canvas: it also runs at script load
+     *  time (see initLoading) so the overlay is already the right shape on the
+     *  first paint. Waiting for the canvas made it appear unadjusted and then
+     *  snap into place once the game booted. */
     function placeLoading() {
-        if (!hintEl || !canvas) return;
-        var hintParent = hintEl.parentNode || document.body;
-        if (loadingEl && loadingEl.parentNode !== hintParent) {
-            hintParent.insertBefore(loadingEl, hintEl);
+        if (!loadingEl) return;
+        var anchor = hintEl || (canvas && canvas.parentNode) || document.body;
+        if (anchor && loadingEl.parentNode !== anchor.parentNode) {
+            anchor.parentNode.insertBefore(loadingEl, anchor);
         }
         var s = loadingEl.style;
         s.width = state.width + 'px';
@@ -262,6 +267,18 @@ function getAudioContext() {
         s.top = state.top + 'px';
         s.transform = state.rotated ? 'rotate(90deg)' : 'none';
         s.transformOrigin = '50% 50%';
+        s.maxWidth = 'none';
+        s.maxHeight = 'none';
+        s.visibility = 'visible';
+        loadingEl.classList.add('placed');
+    }
+
+    /** Position the overlay before the game exists so the very first frame is
+     *  already correct. Needs no canvas - only the viewport. */
+    function initLoading() {
+        if (!loadingEl) return;
+        compute();
+        placeLoading();
     }
 
     function attach() {
@@ -346,4 +363,13 @@ function getAudioContext() {
         toLocal: toLocal,
         relayout: function () { relayout(true); }
     };
+
+    // Size the loading overlay immediately, before Phaser has loaded. This is
+    // what removes the unadjusted-then-snapping flash: the overlay is hidden
+    // by CSS until this runs, and this runs before the first paint.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLoading);
+    } else {
+        initLoading();
+    }
 })();

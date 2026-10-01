@@ -83,6 +83,13 @@
             overflow: hidden;
             z-index: 9999;
             transition: opacity 0.5s ease-out;
+            /* Hidden until layout.js has sized and positioned it. Without this
+               the overlay painted at its CSS default and then visibly snapped
+               to the real canvas rect once the game booted. */
+            visibility: hidden;
+        }
+        #loading-screen.placed {
+            visibility: visible;
         }
         #loading-screen.hidden {
             opacity: 0;
@@ -130,6 +137,15 @@
         <p>Loading Game...</p>
         <p id="loading-progress">0%</p>
     </div>
+    <script>
+        // Safety net: the overlay starts hidden so it never paints at the wrong
+        // size. If layout.js somehow fails to place it, reveal it anyway after
+        // a short delay rather than leaving the player on a blank page.
+        setTimeout(function () {
+            var el = document.getElementById('loading-screen');
+            if (el && !el.classList.contains('placed')) el.classList.add('placed');
+        }, 1200);
+    </script>
     <div id="game-container"></div>
     <div id="rotate-hint">Rotate your phone for a bigger view</div>
     <script src="https://unpkg.com/phaser@3.70.0/dist/phaser.min.js"></script>
