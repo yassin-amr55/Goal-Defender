@@ -572,7 +572,12 @@
         }
 
         // Restrict ball height (same as infinite mode)
-        const maxBallHeight = this.leftGoal.y - this.leftGoal.displayHeight;
+        //
+        // The clamp tests the ball's CENTRE, so the line sits one ball-radius
+        // lower than the goal's top edge. Otherwise the ball's top half stops
+        // hanging above the goal in mid-air with nothing visible to hit.
+        const maxBallHeight = this.leftGoal.y - this.leftGoal.displayHeight
+            + (this.ball.displayWidth / 2);
         if (this.ball.y < maxBallHeight) {
             this.ball.y = maxBallHeight;
             this.ball.setVelocityY(Math.abs(this.ball.body.velocity.y) * 0.5);

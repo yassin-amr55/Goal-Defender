@@ -140,11 +140,8 @@
             this.goal.setImmovable(true);
             this.goal.body.setAllowGravity(false);
             this.goal.setDepth(10); // Goal appears in front of ball
-            
-            // Set max ball height to top of goal
-            this.maxBallHeight = this.goal.y - this.goal.displayHeight;
-            
-            console.log('Goal added at y:', this.goal.y, 'Max ball height:', this.maxBallHeight);
+
+            console.log('Goal added at y:', this.goal.y, 'Goal top:', this.goal.y - this.goal.displayHeight);
         } else {
             console.error('Goal texture not found!');
         }
@@ -205,6 +202,21 @@
             console.log('Min hitbox radius set to ball radius:', this.minHitboxRadius);
         } else {
             console.error('Ball texture not found! Tried:', finalTexture);
+        }
+
+        // Invisible roof above the playfield.
+        //
+        // It sits on the goal, but the clamp below tests the ball's CENTRE
+        // (`if (this.ball.y < this.maxBallHeight)`), not its top edge. So the
+        // line has to be one ball-radius lower than the goal's top edge, or
+        // the ball's top half stops hanging above the goal in mid-air with
+        // nothing visible to hit. This is placed after the ball is created
+        // because it needs the ball's radius.
+        if (this.goal && this.ball) {
+            this.maxBallHeight =
+                this.goal.y - this.goal.displayHeight + (this.ball.displayWidth / 2);
+            console.log('Goal top:', this.goal.y - this.goal.displayHeight,
+                'Max ball height (roof):', this.maxBallHeight);
         }
 
         // Create invisible ground collider for ball to bounce on
