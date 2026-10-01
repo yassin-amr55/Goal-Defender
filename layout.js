@@ -43,6 +43,7 @@ function getAudioContext() {
     var game = null;
     var canvas = null;
     var hintEl = null;
+    var loadingEl = document.getElementById('loading-screen');
     var lastW = -1, lastH = -1;
     var rafId = 0;
 
@@ -135,6 +136,8 @@ function getAudioContext() {
         s.left = state.left + 'px';
         s.top = state.top + 'px';
         s.transform = state.rotated ? 'rotate(90deg)' : 'none';
+
+        placeLoading();
 
         // The hint is a one-time nudge, not a permanent overlay. It shows for a
         // few seconds the first time someone holds a phone upright, then hides
@@ -240,6 +243,25 @@ function getAudioContext() {
         };
 
         return true;
+    }
+
+    /** Move the loading overlay so it exactly covers the presented canvas,
+     *  rotation included. Without this it stayed axis-aligned to the window
+     *  while the game turned 90 degrees on a phone, so the spinner appeared
+     *  sideways outside the play area. */
+    function placeLoading() {
+        if (!hintEl || !canvas) return;
+        var hintParent = hintEl.parentNode || document.body;
+        if (loadingEl && loadingEl.parentNode !== hintParent) {
+            hintParent.insertBefore(loadingEl, hintEl);
+        }
+        var s = loadingEl.style;
+        s.width = state.width + 'px';
+        s.height = state.height + 'px';
+        s.left = state.left + 'px';
+        s.top = state.top + 'px';
+        s.transform = state.rotated ? 'rotate(90deg)' : 'none';
+        s.transformOrigin = '50% 50%';
     }
 
     function attach() {

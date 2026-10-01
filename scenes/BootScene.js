@@ -41,6 +41,8 @@ class BootScene extends Phaser.Scene {
         this.load.image('ball_candy', 'assets/balls/ball-candy.png');
         this.load.image('ball_void', 'assets/balls/ball-void.png');
         this.load.image('ball_gauntlet', 'assets/balls/ball-gauntlet.png');
+        this.load.image('ball_money', 'assets/balls/ball-money.png');
+        this.load.image('ball_revive', 'assets/balls/ball-revive.png');
         
         // Volume icons
         this.load.image('volume-unmute', 'assets/volume-unmute.png');
@@ -52,6 +54,7 @@ class BootScene extends Phaser.Scene {
 
         // Vector icons (replaces the old emoji)
         this.load.svg('trophy-icon', 'assets/icons/trophy.svg', { width: 128, height: 128 });
+        this.load.svg('podium-icon', 'assets/icons/podium.svg', { width: 128, height: 128 });
         this.load.svg('lock-icon', 'assets/icons/lock.svg', { width: 128, height: 128 });
         this.load.svg('settings-icon', 'assets/icons/settings.svg', { width: 128, height: 128 });
         this.load.svg('medal-icon', 'assets/icons/medal.svg', { width: 128, height: 128 });
@@ -73,6 +76,10 @@ class BootScene extends Phaser.Scene {
             }, 500);
         }
         
-        this.scene.start('MenuScene');
+        // First launch asks for a name; after that go straight to the menu so the
+        // player is never asked twice. GDPlayer stores the default on SKIP, so
+        // hasName() is true even for someone who skipped.
+        const named = window.GDPlayer ? window.GDPlayer.hasName() : true;
+        this.scene.start(named ? 'MenuScene' : 'NamePromptScene');
     }
 }

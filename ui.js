@@ -161,8 +161,11 @@
             g.fillStyle(top, 1);
             g.fillRoundedRect(-w / 2, -h / 2, w, h, radius);
             if (sheen > 0) {
+                // Follow the button's own corner radius. Insetting the sheen
+                // horizontally left a grey slab floating inside a pill-shaped
+                // chip (the BEST score button), which read as a rendering bug.
                 g.fillStyle(0xffffff, sheen);
-                g.fillRoundedRect(-w / 2 + radius * 0.7, -h / 2 + 3, w - radius * 1.4, h * 0.34, radius * 0.6);
+                g.fillRoundedRect(-w / 2, -h / 2 + 3, w, h * 0.34, radius);
             }
             if (borderColor) {
                 g.lineStyle(3, borderColor, 1);

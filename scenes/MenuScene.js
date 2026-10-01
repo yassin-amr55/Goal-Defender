@@ -128,6 +128,16 @@
             onClick: () => this.scene.start('AchievementsScene')
         });
 
+        /* ---------------- leaderboard (under the medal) ---------------- */
+
+        UI.iconButton(this, {
+            x: 52, y: 142, radius: 34,
+            icon: 'podium-icon', iconScale: 0.36,
+            fillTop: 0xf0a500, fillBottom: 0xc98a08,
+            depth: 50,
+            onClick: () => this.scene.start('LeaderboardScene')
+        });
+
         /* ---------------- floating ball ---------------- */
 
         const equippedBall = localStorage.getItem('goalDefenderEquippedBall') || 'default';
@@ -181,6 +191,11 @@
 
         // Safety net: pay out anything earned elsewhere (shop, tournament, run)
         if (window.Achievements) window.Achievements.check(this);
+
+        // Publish to the leaderboard. Fire-and-forget: submit() swallows its
+        // own failures and returns a promise nobody awaits, so the menu never
+        // waits on the network.
+        if (window.GDPlayer) window.GDPlayer.submit();
     }
 
     getBallTexture(ballId) {
@@ -197,7 +212,9 @@
             'neon': 'ball_neon',
             'candy': 'ball_candy',
             'void': 'ball_void',
-            'gauntlet': 'ball_gauntlet'
+            'gauntlet': 'ball_gauntlet',
+            'money': 'ball_money',
+            'revive': 'ball_revive'
         };
         return textureMap[ballId] || 'ball_default';
     }

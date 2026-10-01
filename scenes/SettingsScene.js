@@ -50,23 +50,40 @@
             strokeThickness: 6
         }).setOrigin(0.5);
 
-        // Panel
+        // Panel grows to hold the name row: every control must live INSIDE it.
         UI.panel(this, {
-            x: 640, y: 340, w: 800, h: 400, radius: 24,
+            x: 640, y: 344, w: 800, h: 452, radius: 24,
             fillTop: 0x1f2c3d, fillBottom: 0x121c28,
             border: 0x4a6a8a, borderWidth: 2
         });
 
         this.rows = [];
 
-        this.addToggleRow(200, 'Screen Shake', 'gdShake', 'Shake the screen when you hit the ball');
-        this.addToggleRow(292, 'Particles', 'gdParticles', 'Ball trail and explosion effects');
-        this.addToggleRow(384, 'Always Show Hitbox', 'gdHitboxAlways', 'Show the clickable area even when not clickable');
-        this.addToggleRow(476, 'Sound', 'gdMuted', 'Mute or unmute all game sounds', true);
+        this.addToggleRow(184, 'Screen Shake', 'gdShake', 'Shake the screen when you hit the ball');
+        this.addToggleRow(266, 'Particles', 'gdParticles', 'Ball trail and explosion effects');
+        this.addToggleRow(348, 'Always Show Hitbox', 'gdHitboxAlways', 'Show the clickable area even when not clickable');
+        this.addToggleRow(430, 'Sound', 'gdMuted', 'Mute or unmute all game sounds', true);
 
-        // Back button
+        /* ---------------- player name ---------------- */
+        // Inside the panel, above the BACK button. Changing it re-opens the same
+        // prompt used on first launch, so name validation lives in one place.
+        const currentName = window.GDPlayer ? window.GDPlayer.getName() : 'PLAYER';
+        this.add.text(640, 500, 'PLAYER NAME', {
+            fontSize: '15px', color: '#8fa6bd', fontStyle: '800'
+        }).setOrigin(0.5);
+
         UI.button(this, {
-            x: 640, y: 596, w: 220, h: 62,
+            x: 640, y: 532, w: 320, h: 46,
+            label: currentName, textSize: 19,
+            fillTop: 0x4a90c4, fillBottom: 0x2f6b9c, radius: 14,
+            onClick: () => this.scene.start('NamePromptScene', {
+                next: 'SettingsScene', current: currentName
+            })
+        });
+
+        // Back button, clear of the panel edge (panel bottom is y=570)
+        UI.button(this, {
+            x: 640, y: 626, w: 220, h: 62,
             label: 'BACK',
             textSize: 24,
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,

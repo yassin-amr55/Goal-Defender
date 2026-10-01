@@ -3,6 +3,9 @@
         super({ key: 'ShopScene' });
     }
 
+    /** sessionStorage key holding the page the player was last looking at. */
+    static PAGE_KEY = 'gdShopPage';
+
     create() {
         // PHASE 9: Shop System
         
@@ -46,7 +49,7 @@
             border: 0xf0b429, borderWidth: 2
         });
 
-        this.moneyText = this.add.text(170, 62, '$' + this.playerMoney, {
+        this.moneyText = this.add.text(170, 62, '$' + Achievements.fmt(this.playerMoney), {
             fontSize: '27px',
             color: '#ffd45e',
             fontStyle: '900'
@@ -67,13 +70,14 @@
             { id: 'rubber', name: 'Rubber Ball', price: 3600, ability: 'Bounces 25% higher', texture: 'ball_rubber' },
             { id: 'ice', name: 'Ice Ball', price: 4500, ability: 'Hitbox shrinks 50% slower', texture: 'ball_ice' },
             { id: 'anchor', name: 'Anchor Ball', price: 6000, ability: 'Ball moves 50% slower', texture: 'ball_anchor' },
-            { id: 'fire', name: 'Fire Ball', price: 9000, ability: '+2 score per deflect', texture: 'ball_fire' },
+            { id: 'revive', name: 'Revive Ball', price: 10000, ability: 'Saves you once - bounce off the goal', texture: 'ball_revive' },
+            { id: 'fire', name: 'Fire Ball', price: 14500, ability: '+2 score per deflect', texture: 'ball_fire' },
             { id: 'neon', name: 'Neon Ball', price: 15000, ability: 'Speed boost +8% per hit', texture: 'ball_neon' },
             { id: 'ghost', name: 'Ghost Ball', price: 15750, ability: 'Min hitbox 130% of ball', texture: 'ball_ghost' },
-            { id: 'spark', name: 'Spark Ball', price: 22500, ability: 'Max speed 210%', texture: 'ball_spark' },
-            { id: 'candy', name: 'Candy Ball', price: 24000, ability: '+3 score per deflect', texture: 'ball_candy' },
-            { id: 'void', name: 'Void Ball', price: 60000, ability: 'Hitbox starts min, max speed 170%', texture: 'ball_void' },
-            { id: 'gauntlet', name: 'Gauntlet Ball', price: 1500000, ability: 'Hitbox 170%, max speed 100%, +5 score', texture: 'ball_gauntlet' }
+            { id: 'money', name: 'Money Ball', price: 24500, ability: 'Earns $5 per score instead of $3', texture: 'ball_money' },
+            { id: 'candy', name: 'Candy Ball', price: 50000, ability: '+3 score per deflect', texture: 'ball_candy' },
+            { id: 'void', name: 'Void Ball', price: 100000, ability: 'Hitbox starts min, max speed 150%', texture: 'ball_void' },
+            { id: 'gauntlet', name: 'Gauntlet Ball', price: 1500000, ability: 'Hitbox 170%, max speed 130%, +5 score', texture: 'ball_gauntlet' }
         ];
 
         // Back + page navigation. Created before the grid, because renderPage()
@@ -119,8 +123,15 @@
         // 13 balls, so the grid is 4 columns x 2 rows with page navigation.
         // Card is 250 tall, so rows need >= 256 spacing to avoid overlapping.
         this.perPage = 8;
-        this.page = 0;
+
+        // Survive a restart while the player is on page 2. Buying or equipping
+        // calls scene.restart(), which rebuilds everything and used to reset
+        // this to 0 - so you would jump back to page 1 after every purchase
+        // without touching the prev/next buttons.
+        const savedPage = parseInt(sessionStorage.getItem(ShopScene.PAGE_KEY) || '0', 10);
+        this.page = (Number.isFinite(savedPage) && savedPage >= 0) ? savedPage : 0;
         this.pageCount = Math.max(1, Math.ceil(this.ballData.length / this.perPage));
+        this.page = Math.min(this.page, this.pageCount - 1);
 
         this.gridLayer = this.add.container(0, 0);
         this.renderPage();
@@ -142,6 +153,7 @@
         });
 
         const multi = this.pageCount > 1;
+        this.savePage();
         this.prevBtn.setVisible(multi);
         this.nextBtn.setVisible(multi);
         this.pageLabel.setText('PAGE ' + (this.page + 1) + ' / ' + this.pageCount);
@@ -157,7 +169,16 @@
         const next = this.page + delta;
         if (next < 0 || next >= this.pageCount) return;
         this.page = next;
+        this.savePage();
         this.renderPage();
+    }
+
+    /** Remember the page across scene.restart() so buying or equipping a ball
+     *  leaves you on the page you were looking at. */
+    savePage() {
+        try {
+            sessionStorage.setItem(ShopScene.PAGE_KEY, String(this.page));
+        } catch (e) { /* private mode: fall back to always starting at page 1 */ }
     }
 
     createBallCard(ball, x, y) {
@@ -193,7 +214,7 @@
             align: 'center'
         }).setOrigin(0.5));
 
-        box.add(this.add.text(x, y + 44, '$' + ball.price, {
+        box.add(this.add.text(x, y + 44, '$' + Achievements.fmt(ball.price), {
             fontSize: '22px',
             color: '#ffd45e',
             fontStyle: '900'
@@ -202,7 +223,7 @@
         const isOwned = this.ownedBalls.includes(ball.id);
         const isEquipped = this.equippedBall === ball.id;
 
-        let buttonText = 'BUY  $' + ball.price;
+        let buttonText = 'BUY  $' + Achievements.fmt(ball.price);
         let fillTop = 0x3ddc6b, fillBottom = 0x17a34a;
 
         if (isEquipped) {

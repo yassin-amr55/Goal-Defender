@@ -300,7 +300,7 @@ class TutorialScene extends GameScene {
         }).setOrigin(0.5);
 
         const moneyY = 404;
-        this.add.text(640, moneyY, '+ $' + money, {
+        this.add.text(640, moneyY, '+ $' + Achievements.fmt(money), {
             fontSize: '30px', color: '#ffd45e', fontStyle: '900'
         }).setOrigin(0.5);
 

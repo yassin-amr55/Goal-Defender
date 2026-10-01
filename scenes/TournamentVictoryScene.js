@@ -36,7 +36,7 @@ class TournamentVictoryScene extends Phaser.Scene {
 
             this.add.text(640, 360, `Matches Won: ${this.stats.matchesWon || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
             this.add.text(640, 400, `Total Deflects: ${this.stats.totalDeflects || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
-            this.add.text(640, 440, `Match Earnings: $${this.stats.moneyEarned || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
+            this.add.text(640, 440, `Match Earnings: $${Achievements.fmt(this.stats.moneyEarned || 0)}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
 
             // Trophy prize is separate from match earnings, so it gets its own
             // line. Label it as "+" because awardTrophy() pays it out shortly
@@ -80,7 +80,15 @@ class TournamentVictoryScene extends Phaser.Scene {
             else if (roundName === 'finals') roundName = 'Finals';
             
             this.add.text(640, 320, `Eliminated in: ${roundName}`, { fontSize: '24px', fill: '#ffaa00' }).setOrigin(0.5);
-            this.add.text(640, 380, `Total Deflects: ${this.stats.totalDeflects || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
+            this.add.text(640, 356, `Matches Won: ${this.stats.matchesWon || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
+            this.add.text(640, 388, `Total Deflects: ${this.stats.totalDeflects || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
+            this.add.text(640, 424, `Money Earned: ${Achievements.fmt(this.stats.moneyEarned || 0)}`, { fontSize: '24px', fill: '#ffd700', fontStyle: '900' }).setOrigin(0.5);
+
+            // Losing pays no trophy prize - say so, so an empty gap under
+            // "Money Earned" does not read as a bug.
+            this.add.text(640, 464, 'No trophy prize this time', {
+                fontSize: '18px', fill: '#8fa6bd', fontStyle: '700'
+            }).setOrigin(0.5);
         }
 
         // Continue button

@@ -1,0 +1,70 @@
+rules_version = '2';
+
+// Firestore security rules for Goal Defender.
+//
+// WHY THIS FILE MATTERS MORE THAN THE CONFIG
+// The firebaseConfig object in player.js ships inside the game bundle and is
+// readable by anyone. These rules are the only thing standing between a bored
+// visitor and a leaderboard full of 999,999,999 scores. Do not deploy with the
+// default test-mode rules open, and do not switch these to `allow read, write`.
+//
+// The client (player.js) already refuses to submit implausible values and
+// only writes when a score improves. These rules repeat both checks because
+// client-side checks are a courtesy, not a defence - anyone can call
+// firebase.firestore() directly from the console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Reads are public: anyone may view the leaderboard.
+    // Writes are locked down per player below.
+    match /players/{playerId} {
+
+      // A document's size is a hard ceiling on what a single player can store.
+      allow read: if true;
+      allow create: if isOwner(playerId)
+                    && validFields()
+                    && validSize();
+      allow update: if isOwner(playerId)
+                    && validFields()
+                    && validSize();
+      allow delete: if false;   // players are never removed by the client
+    }
+
+    // Only the signed-in owner may write their own document. Anonymous auth
+    // gives every visitor a uid, so this still stops one player editing
+    // another's row without needing accounts or email.
+    function isOwner(playerId) {
+      return request.auth != null && request.auth.uid == playerId;
+    }
+
+    // Reject any document carrying fields the game does not write. This stops
+    // junk such as a "score" object nested inside the record.
+    function validFields() {
+      return request.resource.data.keys().hasOnly([
+        'name', 'highScore', 'deflections', 'trophies', 'updatedAt'
+      ]);
+    }
+
+    function isInt(v) {
+      return v is int;
+    }
+
+    function within(v, lo, hi) {
+      return isInt(v) && v >= lo && v <= hi;
+    }
+
+    // Ranges are generous but not absurd:
+    //   highScore   - a very long single run
+    //   deflections - long-term career total
+    //   trophies    - hundreds of cup wins
+    // name is capped so a player cannot stuff a paragraph into the board.
+    function validSize() {
+      return within(request.resource.data.highScore, 0, 1000000)
+        && within(request.resource.data.deflections, 0, 100000000)
+        && within(request.resource.data.trophies, 0, 9999)
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 14;
+    }
+  }
+}

@@ -64,17 +64,23 @@
         #rotate-hint.visible {
             opacity: 1;
         }
+        /* Size, position and rotation are owned by layout.js so this overlay tracks
+         *  the canvas exactly - including the 90 degree turn on upright phones.
+         *  The values here are only the pre-script first paint. */
         #loading-screen {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 1280px;
+            height: 720px;
             background-color: #1a1a1a;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            transform-origin: 50% 50%;
+            overflow: hidden;
             z-index: 9999;
             transition: opacity 0.5s ease-out;
         }
@@ -83,8 +89,11 @@
             pointer-events: none;
         }
         #loading-screen img {
-            width: 150px;
-            height: 150px;
+            /* Scales with the letterboxed panel rather than a fixed pixel size. */
+            width: 22%;
+            max-width: 150px;
+            height: auto;
+            aspect-ratio: 1 / 1;
             margin-bottom: 20px;
             animation: ballFloat 1.5s ease-in-out infinite, ballSpin 3s linear infinite;
         }
@@ -138,10 +147,13 @@
     <script src="scenes/TournamentVictoryScene.js"></script>
     <script src="scenes/SettingsScene.js"></script>
     <script src="scenes/AchievementsScene.js"></script>
+    <script src="scenes/NamePromptScene.js"></script>
+    <script src="scenes/LeaderboardScene.js"></script>
 
     <script src="settings.js"></script>
     <script src="ui.js"></script>
     <script src="achievements.js"></script>
+    <script src="player.js"></script>
     <script src="layout.js"></script>
     <script src="main.js"></script>
 </body>

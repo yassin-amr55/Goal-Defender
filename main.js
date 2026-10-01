@@ -19,7 +19,7 @@ const config = {
             debug: false
         }
     },
-    scene: [BootScene, MenuScene, ShopScene, GameScene, GameOverScene, SettingsScene, TutorialScene, AchievementsScene, TournamentMenuScene, TrophyRoomScene, TournamentNameScene, TournamentBracketScene, TournamentGameScene, TournamentVictoryScene]
+    scene: [BootScene, NamePromptScene, MenuScene, ShopScene, GameScene, GameOverScene, SettingsScene, LeaderboardScene, TutorialScene, AchievementsScene, TournamentMenuScene, TrophyRoomScene, TournamentNameScene, TournamentBracketScene, TournamentGameScene, TournamentVictoryScene]
 };
 
 // Give every Text object a real font instead of Phaser's "Courier" fallback

@@ -42,7 +42,9 @@
             const grass = this.add.image(640, groundTopY + 3, 'grass');
             grass.setOrigin(0.5, 1); // Anchor to bottom, overlaps ground by 3px
             grass.setDisplaySize(1280, grass.height); // Stretch to full width, keep aspect ratio
-            grass.setDepth(11); // Above goal (depth 10) and wall
+            // Behind everything. At depth 11 the grass drew over the goal and
+            // over the goal-explosion particles, hiding the win feedback.
+            grass.setDepth(-2);
             console.log('Grass added');
         }
 
@@ -102,8 +104,20 @@
         this.ballHistory = [];
         this.HISTORY_FRAMES = 10;
 
+        // Anti-autoclicker: at most one deflect per inbound pass.
+        //
+        // The guards below already require the ball to be left of the middle
+        // line and moving toward the goal, but nothing stopped several
+        // pointerdown events landing in the same frame on a long hitbox - an
+        // autoclicker could farm score and speed boost from one approach.
+        // A deflect sends the ball back to the right, so the "moving left"
+        // test rejects the extra clicks naturally. This flag makes that
+        // explicit and also blocks the case where velocity has not yet been
+        // applied when a second event arrives.
+        this.deflectLock = false;
+
         this.input.on('pointerdown', (pointer) => {
-            if (!this.ball) return;
+            if (!this.ball || this.deflectLock) return;
 
             // PHASE 5: Only clickable when ball is left of middle line
             const ballLeftOfMiddle = this.ball.x < 640;
@@ -129,7 +143,12 @@
                 }
             }
 
-            if (hit) this.onBallClick();
+            if (!hit) return;
+
+            // Lock before deflecting so a second tap arriving in the same
+            // frame is dropped. Released once the ball heads back right.
+            this.deflectLock = true;
+            this.onBallClick();
         });
 
         // Place the goal sprite on the left (directly on top of ground)
@@ -308,6 +327,13 @@
 
         // Mute/Unmute button
         this.createMuteButton();
+
+        // Revive Ball: show the charge from the start so the player knows
+        // they hold a save, not only after it has already been spent.
+        if (this.revivesLeft > 0) {
+            this.createReviveCounter();
+            this.showReviveCounter();
+        }
         
         // Add ESC key listener for pause
         this.input.keyboard.on('keydown-ESC', () => {
@@ -332,6 +358,9 @@
         this.boostStepMain = 1.04;
         this.boostStepLate = 1.02;
         this.startHitboxMin = false; // Start with the hitbox already minimum
+        // Money paid per deflect, and how many missed balls the ball can save.
+        this.scoreRate = 3;
+        this.revivesLeft = 0;
 
         switch(this.equippedBall) {
             case 'golden':
@@ -368,21 +397,69 @@
                 this.scoreMultiplier = 3; // +3 score per deflect
                 break;
             case 'void':
-                // Brutal from the first hit, but the ball never gets quick
+                // Brutal from the first hit, but the ball never gets quick.
+                // Starts at the minimum hitbox with no room to shrink, so the
+                // 150% ceiling is what makes it survivable at all.
                 this.startHitboxMin = true;
-                this.maxSpeedBoost = 170;
+                this.maxSpeedBoost = 150;
                 this.boostStepMain = 1.02;
                 this.boostStepLate = 1.01;
                 break;
             case 'gauntlet':
-                // Easy to hit and scores hugely, but can never go fast
+                // Easy to hit and scores hugely, but can never go fast.
                 this.minHitboxMultiplier = 1.7; // Hitbox 170% of ball size
-                this.maxSpeedBoost = 100;
+                this.maxSpeedBoost = 130;
                 this.scoreMultiplier = 5; // +5 score per deflect
+                break;
+            case 'money':
+                // Pays more per deflect. scoreRate is read by GameOverScene.
+                this.scoreRate = 5; // $5 per deflect instead of $3
+                break;
+            case 'revive':
+                // One free mistake. Set directly rather than via a
+                // startRevives field, because a property left over from a
+                // previous run would leak the free revive into other balls.
+                this.revivesLeft = 1;
                 break;
         }
 
         console.log('Ball abilities loaded:', this.equippedBall, 'maxSpeedBoost:', this.maxSpeedBoost + '%');
+    }
+
+    /** "REVIVE: n" readout at top centre. Rebuilt on demand because a restart
+     *  leaves the reference pointing at a destroyed Text whose canvas is null -
+     *  setText() on it threw "Cannot read properties of null (reading 'cut')". */
+    createReviveCounter() {
+        if (this.reviveText && this.reviveText.scene && this.reviveText.canvas) return;
+        this.reviveText = this.add.text(640, 96, '', {
+            fontSize: '24px', color: '#7ee787', fontStyle: '900',
+            stroke: '#000000', strokeThickness: 4
+        }).setOrigin(0.5).setDepth(40).setVisible(false);
+    }
+
+    showReviveCounter() {
+        this.createReviveCounter();
+        const left = this.revivesLeft;
+        if (!this.reviveText) return;
+        this.reviveText.setText('REVIVE: ' + left);
+        this.reviveText.setVisible(true);
+        if (left <= 0) {
+            // Spent. Grey it out rather than hiding it, so the player
+            // understands why the ball no longer saves them.
+            this.reviveText.setColor('#8fa6bd');
+        }
+    }
+
+    /** Short green flash across the screen when a revive fires. */
+    reviveFlash() {
+        const flash = this.add.rectangle(640, 360, 1280, 720, 0x2ecc71, 0.5)
+            .setDepth(45);
+        this.tweens.add({
+            targets: flash,
+            alpha: { from: 0.5, to: 0 },
+            duration: 420,
+            onComplete: () => flash.destroy()
+        });
     }
 
     getBallTexture() {
@@ -399,7 +476,9 @@
             'neon': 'ball_neon',
             'candy': 'ball_candy',
             'void': 'ball_void',
-            'gauntlet': 'ball_gauntlet'
+            'gauntlet': 'ball_gauntlet',
+            'money': 'ball_money',
+            'revive': 'ball_revive'
         };
         return textureMap[this.equippedBall] || 'ball_default';
     }
@@ -754,6 +833,13 @@
     }
 
     update() {
+        // Release the anti-autoclicker lock once the ball is heading back to
+        // the right. A deflect always sends it right, so this re-arms for the
+        // next approach without needing a timer.
+        if (this.deflectLock && this.ball && this.ball.body && this.ball.body.velocity.x > 0) {
+            this.deflectLock = false;
+        }
+
         // Remember where the ball has just been, so a tap arriving a few
         // frames after the player saw it still counts as a hit.
         if (this.ball) {
@@ -804,9 +890,22 @@
             
             // Lose when the entire ball passes through the goal opening
             if (ballRightEdge < goalOpeningX) {
-                this.gameOver = true;
-                this.triggerGameOver();
-            }
+                    // Revive Ball: spend the charge instead of losing. The ball is
+                    // pushed back out to the right and sent away from the goal, so
+                    // play continues from the same score. Once per run.
+                    if (this.revivesLeft > 0) {
+                        this.revivesLeft--;
+                        this.reviveFlash();
+                        this.showReviveCounter();
+                        this.ball.x = goalOpeningX + (this.ball.displayWidth / 2) + 12;
+                        this.ball.setVelocity(this.ballSpeed, -260);
+                        this.ball.setVisible(true);
+                        this.hitboxCircle.setVisible(true);
+                        return;
+                    }
+                    this.gameOver = true;
+                    this.triggerGameOver();
+                }
         }
     }
 }

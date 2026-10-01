@@ -48,7 +48,8 @@
             const grass = this.add.image(640, groundTopY + 3, 'grass');
             grass.setOrigin(0.5, 1);
             grass.setDisplaySize(1280, grass.height);
-            grass.setDepth(11);
+            // Behind the goal and explosion particles, not over them.
+            grass.setDepth(-2);
         }
 
         this.groundLevel = groundY - groundHeight;
@@ -148,6 +149,10 @@
         const goalLeftEdge = this.rightGoal.x - (this.rightGoal.displayWidth / 2);
         this.barrierX = goalLeftEdge - 20; // 20px left of goal's left edge
         this.allowGoal = false;
+
+        // Anti-autoclicker: at most one deflect per inbound pass. Set when a
+        // tap lands, cleared in update() once the ball is travelling right.
+        this.deflectLock = false;
         
         // Create invisible barrier
         const barrierY = (groundY - groundHeight) / 2; // Middle of playable area
@@ -238,12 +243,15 @@
 
         // Click handler (same as infinite mode)
         this.input.on('pointerdown', (pointer) => {
-            if (this.ball) {
+            // Anti-autoclicker lock: cleared in update() once the ball travels
+            // right, so only one deflect per inbound pass can land.
+            if (this.ball && !this.deflectLock) {
                 const distance = Phaser.Math.Distance.Between(pointer.x, pointer.y, this.ball.x, this.ball.y);
                 const ballLeftOfMiddle = this.ball.x < 640;
                 const movingLeft = this.ball.body.velocity.x < 0;
 
                 if (distance <= this.hitboxRadius && movingLeft && ballLeftOfMiddle) {
+                    this.deflectLock = true;
                     this.onBallClick();
                 }
             }
@@ -286,7 +294,9 @@
             'neon': 'ball_neon',
             'candy': 'ball_candy',
             'void': 'ball_void',
-            'gauntlet': 'ball_gauntlet'
+            'gauntlet': 'ball_gauntlet',
+            'money': 'ball_money',
+            'revive': 'ball_revive'
         };
         return textureMap[this.equippedBall] || 'ball_default';
     }
@@ -579,6 +589,15 @@
             }
         }
 
+        // Release the deflect lock once the ball is heading back to the right.
+        //
+        // Mirrors the anti-autoclicker lock in GameScene: one deflect per
+        // inbound pass. The deflect sends the ball right, so this re-arms for
+        // the next approach instead of needing a timer.
+        if (this.deflectLock && this.ball && this.ball.body.velocity.x > 0) {
+            this.deflectLock = false;
+        }
+
         // Restrict ball height (same as infinite mode)
         //
         // The clamp tests the ball's CENTRE, so the line sits one ball-radius
@@ -743,10 +762,20 @@
 
         // Wait for fade to complete, then transition
         this.cameras.main.once('camerafadeoutcomplete', () => {
-            // Show defeat screen
-            this.scene.start('TournamentVictoryScene', { 
-                mode: this.mode, 
-                stats: { matchesWon: 0, totalDeflects: this.totalDeflects, moneyEarned: 0 },
+            // Show defeat screen.
+            //
+            // The summary must carry the run so far rather than zeros. The
+            // money was already banked match by match into the balance, so
+            // reporting 0 would tell the player they earned nothing for the
+            // rounds they had already won.
+            const progress = JSON.parse(localStorage.getItem('tournamentProgress') || '{}');
+            this.scene.start('TournamentVictoryScene', {
+                mode: this.mode,
+                stats: {
+                    matchesWon: progress.matchesWon || 0,
+                    totalDeflects: this.totalDeflects,
+                    moneyEarned: progress.moneyEarned || 0
+                },
                 result: 'defeat'
             });
         });

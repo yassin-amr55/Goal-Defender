@@ -7,6 +7,10 @@
         // Receive score from GameScene
         this.finalScore = data.score || 0;
         this.finalDeflections = data.deflections || 0;
+        // Which ball was equipped, so the Money Ball can pay $5 per deflect.
+        this.equippedBall = data.equippedBall
+            || localStorage.getItem('goalDefenderEquippedBall')
+            || 'default';
     }
 
     create() {
@@ -43,7 +47,8 @@
         // PHASE 9: Add money earned ($3 per deflection)
         // deflections is captured in init() - `data` is not in scope here.
         const deflections = this.finalDeflections || this.finalScore;
-        const moneyEarned = deflections * 3;
+        const rate = (this.equippedBall === 'money') ? 5 : 3;
+        const moneyEarned = deflections * rate;
         const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0);
         const newTotal = currentMoney + moneyEarned;
         localStorage.setItem('goalDefenderMoney', newTotal);
@@ -97,7 +102,7 @@
             fontStyle: '900'
         }).setOrigin(0.5);
 
-        this.add.text(640, 410, '+ $' + moneyEarned, {
+        this.add.text(640, 410, '+ $' + Achievements.fmt(moneyEarned), {
             fontSize: '26px',
             color: '#ffd45e',
             fontStyle: '900'
