@@ -107,13 +107,33 @@ service cloud.firestore {
       allow update: if isOwner(playerId)
                     && validFields()
                     && validSize();
-      allow delete: if false;   // rows are never removed by the client
+      /* Deleting a row.
+       *
+       * Two cases, both narrow:
+       *   1. Your OWN row - owner only, so you can withdraw from the board.
+       *   2. An ANONYMOUS row, by anyone signed in with a real account.
+       *
+       * Case 2 exists because of a gap the rules created for themselves. A
+       * visitor played before having an account, so their row is keyed by an
+       * anonymous id - and once they sign in, that id is no longer their auth
+       * uid. isOwner() therefore refuses, and the row could never be cleaned
+       * up: the board kept a ghost of every player who had since made an
+       * account, usually under a differently-capitalised version of their name,
+       * so "HAMZA" sat beside "hamza" and neither could be identified as the
+       * same person.
+       *
+       * It is safe because the flag can only be set by a write that is already
+       * owner-only, so nobody can mark somebody else's row to make it
+       * deletable, and an account row never carries the flag. */
+      allow delete: if isOwner(playerId)
+                    || (isRealUser()
+                        && resource.data.anon == true);
 
       // Reject any document carrying fields the game does not write. This stops
       // junk such as a nested object smuggled in alongside the score.
       function validFields() {
         return request.resource.data.keys().hasOnly([
-          'name', 'highScore', 'deflections', 'trophies', 'updatedAt'
+          'name', 'highScore', 'deflections', 'trophies', 'updatedAt', 'anon'
         ]);
       }
 

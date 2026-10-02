@@ -27,6 +27,19 @@
     var currentUser = null;        // Firebase user or null
     var currentAccount = null;     // { uid, username, createdAt, stats }
     var syncTimer = 0;
+
+/* Fingerprint of the account document this client last wrote, used to detect
+ * an edit made from outside the game. Empty until the first sign-in or push. */
+var lastPushedSignature = '';
+
+/* Guards against overlapping pulls: a slow network must not stack requests. */
+var pulling = false;
+
+/* How often to look for an outside edit. Ten seconds is quick enough to feel
+ * instant and slow enough to be invisible - one small document read. */
+var CLOUD_WATCH_MS = 10000;
+
+var cloudWatchTimer = 0;
     var listeners = [];
 
     /* localStorage keys that make up a save. Order matters for readability
@@ -410,15 +423,174 @@
             return Promise.resolve({ ok: false, skipped: 'no-account-loaded' });
         }
 
+        var save = readSave();
         return P.firestore().collection(ACCOUNT_COLLECTION).doc(currentUser.uid)
             .set({
                 username: currentAccount.username,
                 email: currentUser.email || '',
-                save: readSave(),
+                save: save,
                 updatedAt: ts()
             }, { merge: true })
-            .then(function () { return { ok: true }; })
+            .then(function () {
+                /* Remember exactly what this client wrote.
+                 *
+                 * This is how a change made OUTSIDE the game is detected. The
+                 * player used to have to sign out before an edit in the
+                 * Firebase console would stick, because the running game held
+                 * its own copy of the save in localStorage and pushed it back
+                 * over the edit on the next sync. Comparing the document we
+                 * just wrote against the one we later find lets us tell our
+                 * own write apart from someone else's. */
+                lastPushedSignature = signatureOf(currentAccount.username, save);
+                return { ok: true };
+            })
             .catch(err);
+    }
+
+    /* A stable fingerprint of an account document.
+     *
+     * Keys are sorted and every value stringified, so the comparison cannot be
+     * upset by key ordering or by a number arriving as a string - Firestore
+     * hands back whatever type was written, and the console can produce a
+     * different one than the game did for the same value. */
+    function signatureOf(username, save) {
+        var norm = {};
+        Object.keys(save || {}).sort().forEach(function (k) {
+            norm[k] = String(save[k]);
+        });
+        return JSON.stringify({ u: username || '', s: norm });
+    }
+
+    /* Apply a cloud save OVER local storage, because the cloud is the newer
+     * copy and something outside this game changed it.
+     *
+     * Unlike mergeSave() this does not keep the larger of two numbers. That is
+     * the whole point: an owner lowering a score from 69 to 10 in the console
+     * expects 10, and a "take the maximum" merge would silently restore 69.
+     *
+     * Only keys the cloud actually has are touched. A partial document must
+     * never blank out progress the cloud has no opinion about. */
+    function applyCloudSaveAuthoritative(save) {
+        if (!save) return false;
+
+        var touched = false;
+        Object.keys(save).forEach(function (k) {
+            if (SAVE_KEYS.indexOf(k) === -1) return;   // never trust unknown keys
+            if (save[k] === null || save[k] === undefined) return;
+            localStorage.setItem(k, String(save[k]));
+            touched = true;
+        });
+        if (!touched) return false;
+
+        /* An equipped ball the owner just removed would still be equipped, and
+         * the game would render a ball the player no longer owns. Fall back to
+         * the default rather than showing it. */
+        var balls;
+        try { balls = JSON.parse(localStorage.getItem('goalDefenderOwnedBalls') || '["default"]'); }
+        catch (e) { balls = ['default']; }
+        if (!Array.isArray(balls) || !balls.length) balls = ['default'];
+        if (balls.indexOf('default') === -1) balls.unshift('default');
+        localStorage.setItem('goalDefenderOwnedBalls', JSON.stringify(balls));
+
+        var equipped = localStorage.getItem('goalDefenderEquippedBall');
+        if (equipped && balls.indexOf(equipped) === -1) {
+            localStorage.setItem('goalDefenderEquippedBall', 'default');
+            /* The owner removed the equipped ball but not the equippedBall
+             * field, so the cloud is left claiming a ball that is no longer
+             * owned. Push the correction so the document is self-consistent for
+             * anyone reading it - and so a second device does not have to wait
+             * for its own login to fix it. Safe to do once: the signature was
+             * already recorded, so this push cannot re-trigger an adopt. */
+            return true;
+        }
+        return true;
+    }
+
+    /* Look for a change made outside this game and adopt it.
+     *
+     * Runs on a timer and whenever the tab comes back to the foreground, so an
+     * edit lands within seconds without the player signing out, refreshing, or
+     * doing anything at all. */
+    function pullFromCloud() {
+        if (!currentUser || !currentAccount) return Promise.resolve();
+        if (pulling) return Promise.resolve();
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+            return Promise.resolve();      // do not touch storage while backgrounded
+        }
+
+        pulling = true;
+        return P.firestore().collection(ACCOUNT_COLLECTION).doc(currentUser.uid).get()
+            .then(function (snap) {
+                if (!snap.exists) return;
+                var data = snap.data() || {};
+                var sig = signatureOf(data.username, data.save);
+                if (sig === lastPushedSignature) return;      // our own write, or no change
+
+                /* Someone edited this account from outside the game. Adopt it,
+                 * and record the new signature so this is a one-time change
+                 * rather than a loop. */
+                applyAccount(snap);
+                var applied = applyCloudSaveAuthoritative(data.save);
+                lastPushedSignature = sig;
+                if (applied) {
+                    emit();
+                    /* Write back the one thing the cloud cannot be trusted to
+                     * keep consistent on its own: an equipped ball that is no
+                     * longer in the owned list. */
+                    scheduleSync();
+                }
+            })
+            .catch(function () { /* offline, or rules not published - stay quiet */ })
+            .then(function () { pulling = false; });
+    }
+
+    /** Keep pulling so outside edits land on their own. */
+    function installCloudWatch() {
+        if (typeof window.setInterval !== 'function') return;
+        if (cloudWatchTimer) return;
+        cloudWatchTimer = window.setInterval(pullFromCloud, CLOUD_WATCH_MS);
+
+        // Returning to the tab is the moment a player is most likely to be
+        // about to look at something the owner just changed.
+        var wake = function () {
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+            pullFromCloud();
+        };
+        window.addEventListener('focus', wake);
+        if (window.document) {
+            window.document.addEventListener('visibilitychange', wake);
+        }
+    }
+
+    function stopCloudWatch() {
+        if (cloudWatchTimer) {
+            window.clearInterval(cloudWatchTimer);
+            cloudWatchTimer = 0;
+        }
+    }
+
+    /* Retire the anonymous identity this device was using before sign-in.
+     *
+     * Before accounts, the leaderboard gave every visitor an anonymous id and
+     * published a row under it. Signing in creates a SECOND identity - the
+     * account - so the same person ended up with two rows, the old one stuck
+     * under the name they played with ("HAMZA") and the new one under the
+     * account username. Nothing ever removed the first, so the board slowly
+     * filled with ghosts of people who had since made an account.
+     *
+     * The old row's stats are carried onto the account first, so nothing is
+     * lost, and only then is the old row deleted. The account is the only
+     * identity that survives.
+     *
+     * Failure here is not important enough to interrupt a sign-in: the player
+     * is already signed in, and a leftover row is a cosmetic problem, not a
+     * lost save. */
+    function retireAnonymousIdentity() {
+        if (!window.GDPlayer || typeof window.GDPlayer.retireAnonymousRow !== 'function') {
+            return Promise.resolve();
+        }
+        return window.GDPlayer.retireAnonymousRow(currentUser.uid)
+            .catch(function () { return { ok: false }; });
     }
 
     /** Coalesce rapid local changes into one write. */
@@ -572,9 +744,17 @@
                     // made since the last sync silently disappeared.
                     applyAccount(snap);
                     mergeSave(currentAccount.save);
+                    /* Seed the fingerprint from what we just read, so the
+                     * watcher does not mistake this sign-in for an outside
+                     * edit and "restore" the values it already applied. */
+                    lastPushedSignature = signatureOf(currentAccount.username, currentAccount.save);
                     return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid)
                         .set({ lastLogin: ts() },
                             { merge: true })
+                        .then(function () {
+                            installCloudWatch();
+                            return retireAnonymousIdentity();
+                        })
                         .then(function () {
                             emit();
                             return { ok: true, isNew: false, username: currentAccount.username };
@@ -607,6 +787,17 @@
                 // The username TYPED is the account's name.
                 var name = typedUsername;
                 currentAccount = { uid: user.uid, username: name, createdAt: null };
+
+                /* The account name becomes the player's name immediately.
+                 *
+                 * A sign-up adopts this device's save, but the save carries the
+                 * old local player name, and nothing was rewriting it. The
+                 * result was two players on one device: an account called
+                 * "hamza" still displaying, and still publishing, as whatever
+                 * name they had picked before ("HAMZA"). The account is the
+                 * authority on who this is, so it wins from the moment it
+                 * exists - the old name is replaced, not left alongside. */
+                localStorage.setItem('gdPlayerName', name);
                 return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid)
                     .set({
                         username: name,
@@ -614,6 +805,14 @@
                         save: readSave(),
                         createdAt: ts(),
                         updatedAt: ts()
+                    })
+                    .then(function () {
+                        lastPushedSignature = signatureOf(name, readSave());
+                        installCloudWatch();
+                        /* A brand new account has just adopted this device's
+                         * progress, so the old anonymous identity on the board
+                         * is now a duplicate of it and must go. */
+                        return retireAnonymousIdentity();
                     })
                     .then(function () {
                         emit();
@@ -733,15 +932,19 @@
                 }
             })
             .then(function () {
+                stopCloudWatch();
                 currentUser = null;
                 currentAccount = null;
+                lastPushedSignature = '';
                 emit();
                 return { ok: true };
             })
             .catch(function () {
                 // Never trap someone in a signed-in state because a write failed.
+                stopCloudWatch();
                 currentUser = null;
                 currentAccount = null;
+                lastPushedSignature = '';
                 emit();
                 return { ok: true };
             });
