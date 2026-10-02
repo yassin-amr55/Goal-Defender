@@ -89,17 +89,19 @@
         inputElement.maxLength = '20';
         inputElement.id = 'tournament-name-input';
 
-        // Match the in-game UI: dark field, gold border, Nunito
+        /* Match the in-game UI: dark field, gold border, Nunito.
+         *
+         * Size and position are NOT set here. This used to be centred with
+         * left:50%/top:50%, which centres on the VIEWPORT - so on an upright
+         * phone, where layout.js turns the canvas 90 degrees and the player is
+         * looking at the game sideways, the textbox stayed upright and sat
+         * perpendicular to everything around it.
+         *
+         * GDLayout.registerOverlay() locks the field to the rectangle below in
+         * GAME coordinates and applies the same scale AND the same rotation as
+         * the canvas, and re-places it if the phone is turned mid-typing. */
         inputElement.style.position = 'absolute';
-        inputElement.style.left = '50%';
-        inputElement.style.top = '50%';
-        inputElement.style.transform = 'translate(-50%, -50%)';
-        inputElement.style.width = '500px';
-        inputElement.style.height = '72px';
-        inputElement.style.fontSize = '30px';
-        inputElement.style.padding = '10px 18px';
-        inputElement.style.border = '3px solid #f0b429';
-        inputElement.style.borderRadius = '14px';
+        inputElement.style.margin = '0';
         inputElement.style.background = 'rgba(8,15,24,0.95)';
         inputElement.style.color = '#ffffff';
         inputElement.style.fontWeight = '700';
@@ -110,8 +112,19 @@
         inputElement.style.outline = 'none';
         inputElement.style.boxShadow = 'none';
         inputElement.style.caretColor = '#ffd45e';
+        inputElement.style.transformOrigin = 'center center';
 
         document.body.appendChild(inputElement);
+        this.registerCleanup();
+
+        // Same rectangle the backing panel above is drawn at.
+        this.unregisterOverlay = (window.GDLayout && window.GDLayout.registerOverlay)
+            ? window.GDLayout.registerOverlay(inputElement, {
+                x: 640 - 500 / 2, y: 360 - 72 / 2, w: 500, h: 72,
+                fontPx: 30, padY: 10, radius: 14, borderW: 3, borderColor: '#f0b429'
+            })
+            : null;
+
         inputElement.focus();
 
         // Store reference for cleanup
@@ -154,7 +167,7 @@
                 }
 
                 // Remove input element
-                inputElement.remove();
+                this.removeInputElement();
 
                 // Start tournament bracket scene
                 this.scene.start('TournamentBracketScene', { mode: this.tournamentMode });
@@ -169,7 +182,7 @@
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
             radius: 16,
             onClick: () => {
-                inputElement.remove();
+                this.removeInputElement();
                 this.scene.start('TournamentMenuScene');
             }
         });
@@ -178,17 +191,36 @@
         UI.topRight(this, {});
     }
 
-    // Phaser does not call methods named shutdown()/stop() automatically.
-    // These are the real lifecycle hooks, so the <input> is always cleaned up.
-    shutdown() {
-        this.removeInputElement();
-    }
-
-    stop() {
-        this.removeInputElement();
+    /* Phaser 3 does NOT call a method named shutdown() or stop(). Only the
+     * 'shutdown' event fires, so a scene that cleaned up in those methods never
+     * cleaned up at all - and the <input> stayed in the document forever.
+     *
+     * That is not just a leak. Each visit added another live textbox, and the
+     * stale ones were positioned by the OLD fixed centering, which does not
+     * rotate with the canvas. Leaving this screen twice meant a correctly
+     * oriented field with a portrait one sitting on top of it, which is
+     * exactly what it looked like on a phone.
+     *
+     * 'destroy' is registered as well so the node is released even if the
+     * scene is torn down without a clean shutdown. removeInputElement() is
+     * idempotent, so both paths are safe. */
+    registerCleanup() {
+        this.events.on('shutdown', () => this.removeInputElement());
+        this.events.on('destroy', () => this.removeInputElement());
     }
 
     removeInputElement() {
+        /* Drop the layout registration BEFORE removing the node.
+         *
+         * The overlay list is module-level and outlives this scene, so a
+         * removed input left in it would keep being positioned on every resize
+         * and rotation - a write to a detached element, once per input per
+         * relayout, for the rest of the session. Every exit path (start,
+         * back, shutdown, stop) funnels through here. */
+        if (this.unregisterOverlay) {
+            this.unregisterOverlay();
+            this.unregisterOverlay = null;
+        }
         if (this.inputElement && this.inputElement.parentNode) {
             this.inputElement.remove();
         }

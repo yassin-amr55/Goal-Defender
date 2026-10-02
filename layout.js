@@ -137,6 +137,9 @@ function getAudioContext() {
         s.top = state.top + 'px';
         s.transform = state.rotated ? 'rotate(90deg)' : 'none';
 
+        // Any HTML input locked to the canvas has to follow it.
+        placeAllOverlays();
+
         placeLoading();
 
         // The hint is a one-time nudge, not a permanent overlay. It shows for a
@@ -157,6 +160,95 @@ function getAudioContext() {
 
     function hintSeen() {
         try { return localStorage.getItem(HINT_KEY) === 'true'; } catch (e) { return false; }
+    }
+
+    /* ------------------------------------------------------------------ *
+     * DOM overlays that must line up with the canvas
+     *
+     * The canvas is a normal element rotated with a CSS transform, but an HTML
+     * <input> appended to <body> is not. Centring one with left:50%/top:50%
+     * centres it on the VIEWPORT, so on an upright phone - where the canvas is
+     * turned 90 degrees and the player is looking at the game sideways - the
+     * textbox stayed upright and sat perpendicular to everything around it.
+     * It read as a different app pasted over the game.
+     *
+     * registerOverlay() takes a rectangle in GAME coordinates and keeps the
+     * element locked to it: same size, same scale, and the same rotation as
+     * the canvas. It re-places itself whenever the canvas is re-laid-out, so a
+     * player who rotates their phone mid-form sees the field follow rather
+     * than jump to the wrong edge.
+     * ------------------------------------------------------------------ */
+    var overlays = [];
+
+    function placeOverlay(o) {
+        var el = o.el;
+        if (!el || !el.style) return;
+        if (!state.width || !state.height) return;
+
+        // Size in the canvas' own unrotated pixel space.
+        var ew = (o.gw / GAME_W) * state.width;
+        var eh = (o.gh / GAME_H) * state.height;
+
+        // Offset of this element's centre from the canvas centre, in canvas px.
+        var px = ((o.gx + o.gw / 2) - GAME_W / 2) / GAME_W * state.width;
+        var py = ((o.gy + o.gh / 2) - GAME_H / 2) / GAME_H * state.height;
+
+        var cx = state.left + state.width / 2;
+        var cy = state.top + state.height / 2;
+        var sx, sy;
+
+        if (state.rotated) {
+            /* CSS rotate(90deg) is clockwise on screen: a point offset
+             * (dx, dy) from the centre lands at (-dy, dx). */
+            sx = cx - py;
+            sy = cy + px;
+        } else {
+            sx = cx + px;
+            sy = cy + py;
+        }
+
+        el.style.width = Math.round(ew) + 'px';
+        el.style.height = Math.round(eh) + 'px';
+        el.style.left = Math.round(sx - ew / 2) + 'px';
+        el.style.top = Math.round(sy - eh / 2) + 'px';
+        el.style.transform = state.rotated ? 'rotate(90deg)' : 'none';
+
+        /* Scale the font with the canvas. A DOM font size is in screen px, so
+         * a 30px input drawn over 1280px of game width has to shrink with the
+         * canvas or the text overflows the box it is meant to fill. */
+        if (o.fontPx) {
+            var k = state.rotated ? state.width / GAME_W : state.width / GAME_W;
+            el.style.fontSize = Math.max(11, Math.round(o.fontPx * k)) + 'px';
+            if (o.padY !== undefined) el.style.padding = Math.max(2, Math.round(o.padY * k)) + 'px';
+            if (o.radius !== undefined) el.style.borderRadius = Math.max(3, Math.round(o.radius * k)) + 'px';
+            if (o.borderW !== undefined) el.style.border = Math.max(1, Math.round(o.borderW * k)) + 'px solid ' + (o.borderColor || '#f0b429');
+        }
+    }
+
+    function placeAllOverlays() {
+        overlays.forEach(placeOverlay);
+    }
+
+    /** Lock a DOM element to a rectangle in game coordinates.
+     *  Returns a function that unregisters it. Call that when the element is
+     *  removed, otherwise a destroyed input stays in the overlay list and keeps
+     *  being written to on every resize. */
+    function registerOverlay(el, o) {
+        var entry = {
+            el: el,
+            gx: o.x, gy: o.y, gw: o.w, gh: o.h,
+            fontPx: o.fontPx || 0,
+            padY: o.padY,
+            radius: o.radius,
+            borderW: o.borderW,
+            borderColor: o.borderColor
+        };
+        overlays.push(entry);
+        placeOverlay(entry);
+        return function unregister() {
+            var i = overlays.indexOf(entry);
+            if (i > -1) overlays.splice(i, 1);
+        };
     }
 
     function dismissHint() {
@@ -361,6 +453,13 @@ function getAudioContext() {
     window.GDLayout = {
         state: state,
         toLocal: toLocal,
+        registerOverlay: registerOverlay,
+        /* How much the canvas is scaled relative to game pixels. A DOM overlay
+         * needs this to size its font to match the game text beside it. */
+        scale: function () {
+            return state.width ? state.width / GAME_W : 1;
+        },
+        rotated: function () { return state.rotated; },
         relayout: function () { relayout(true); }
     };
 

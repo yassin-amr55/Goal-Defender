@@ -261,10 +261,14 @@ fast — balance against diminishing real returns, not displayed percentage.
 
 Ships the new balls from Part 9. Sequence:
 
+0. Read **9.2.1** (ability audit — two old "bugs" are not bugs, one new dead
+   field found) and **9.2.2** (UI/design review — font floor, bracket
+   truncation) before touching anything
 1. Implement Part 9 (new balls: textures, `ballData`, abilities, texture maps)
 2. `node --check` every `.js`; verify all scenes boot clean
 3. Verify each new ball's ability **behaviourally**, not by reading the code —
-   the same standard the original 13 were held to
+   the same standard the original 13 were held to, and the standard that caught
+   the dead `scoreRate` field
 4. Confirm the shop grid still lays out cleanly (4 cols × 2 rows, 8 per page,
    2+ pages) and that **price order is still correct** with new entries
 5. Balance pass: re-check price order against ability strength
@@ -276,6 +280,207 @@ relative to the rebalanced scale, not the original one.
 
 Carries forward from v2.1: the "not using the screenshot column" note if theme
 layout changed, and any Part 4.2 price/reward values as shipped in v2.1.
+
+---
+
+## Part 9.2.1 — Ball ability audit (all 14 balls, verified in play)
+
+Run before adding new balls. **Two previously reported defects turned out not
+to exist**, and one real defect was found that nobody had reported.
+
+### `audit-abilities.js` — structural pass
+
+Every ability is a field assigned in `loadBallAbilities()`. If nothing *reads*
+that field outside the loader, the ball costs money and does nothing. The
+audit finds the loader body by counting braces, then reports reads with line
+numbers so the count can be checked rather than trusted.
+
+### F-07 is wrong — the Rubber Ball works
+
+`TEST-RESULTS.md` F-07/F-27 report that `jumpMultiplier` is "assigned but never
+read" and that the $3,600 Rubber Ball buys nothing. **Both are false.** The read
+was missed because the audit only looked inside the loader:
+
+```js
+// scenes/GameScene.js:719
+const jumpVelocity = -400 * (this.jumpMultiplier || 1);
+```
+
+Measured in play, ball parked on the ground then bounced:
+
+| Ball | `jumpMultiplier` | launch velocity | peak rise |
+|---|---|---|---|
+| Default | 1.00 | −400 | 162px |
+| Rubber | 1.25 | −500 | **246px** |
+
+**No fix is needed for the ball.** Correct `TEST-RESULTS.md` F-07 and F-27
+instead of shipping a "fix" for a bug that isn't there.
+
+`TournamentGameScene` does set `jumpMultiplier = 1` and never reads it. That is
+**correct**, not the same bug: tournaments deliberately neutralise *every*
+ability so all entrants are on identical footing. The audit asserts this rather
+than trusting the comment.
+
+### The real Rubber Ball defect: the description is wrong in the other direction
+
+Shop copy says **"Bounces 25% higher"**. That is the *velocity*. Height follows
+`h = v²/2g`, so +25% velocity is **+52% height** — measured 162px → 246px.
+
+The ball under-delivers on its own marketing and over-delivers in play. Two
+clean options:
+
+- **Restate the copy** as *"Bounces over 50% higher"* and keep `1.25`.
+- **Or keep the promise literal**: set `jumpMultiplier ≈ 1.118` so the rise is
+  genuinely 25% — but a less round number is harder to reason about later.
+
+Recommendation: **restate the copy.** The stronger bounce is good for the player
+and the current number is the easier one to tune.
+
+### Roof headroom — a ceiling nobody has hit yet
+
+Height is clamped at `maxBallHeight` (goal top minus one ball radius,
+`GameScene.js:851`):
+
+| Ball | peak | roof | clearance |
+|---|---|---|---|
+| Default | 407 | 288 | 119px |
+| Rubber | 323 | 288 | **35px** |
+
+The Rubber Ball clears the roof by 35px. Any Part 9 ball that raises
+`jumpMultiplier` further starts losing height to the clamp, so it would deliver
+less than its number says — silently, because the clamp looks like normal play.
+**Check clearance before tuning that stat past ~1.3.**
+
+### New finding: `scoreRate` is dead state
+
+```js
+// scenes/GameScene.js:396 — the comment is false
+// Pays more per deflect. scoreRate is read by GameOverScene.
+this.scoreRate = 5;
+```
+
+`scoreRate` is assigned in `GameScene` and **read nowhere in the codebase**.
+The Money Ball still works, because `GameOverScene` ignores the field and reads
+the equipped ball directly:
+
+```js
+// scenes/GameOverScene.js:50
+const rate = (this.equippedBall === 'money') ? 5 : 3;
+```
+
+Verified in play: default pays $3/deflect, Money Ball pays $5/deflect.
+
+So this is a trap rather than a bug — the field looks like the Money Ball's
+wiring, and a future edit to `scoreRate` would compile, pass review and do
+nothing. Either delete it or wire `GameOverScene` to read it; **deleting is
+safer**, since one source of truth for the rate is better than two.
+
+### All 14 abilities confirmed working
+
+Endless mode only, by design. Every description maps to a field that is read:
+
+| Ball | Price | Ability | Field |
+|---|---|---|---|
+| Golden | $150 | hitbox shrinks 15% slower | `hitboxShrinkMultiplier` |
+| Steel | $900 | moves 10% slower | `speedMultiplier` |
+| Rubber | $3,600 | bounces higher | `jumpMultiplier` |
+| Ice | $4,500 | hitbox shrinks 50% slower | `hitboxShrinkMultiplier` |
+| Anchor | $6,000 | moves 50% slower | `speedMultiplier` |
+| Revive | $10,000 | saves you once | `revivesLeft` |
+| Fire | $14,500 | +2 score per deflect | `scoreMultiplier` |
+| Neon | $15,000 | speed boost +8% per hit | `boostStepMain` |
+| Ghost | $15,750 | min hitbox 130% | `minHitboxMultiplier` |
+| Money | $24,500 | $5 per score | *(read in GameOverScene)* |
+| Candy | $50,000 | +3 score per deflect | `scoreMultiplier` |
+| Void | $100,000 | starts min, max 150% | `startHitboxMin`, `maxSpeedBoost` |
+| Gauntlet | $1.5M | hitbox 170%, max 130%, +5 score | `scoreMultiplier`, `maxSpeedBoost` |
+
+**Price sanity:** Golden ($150) and Ice ($4,500) share one field at 0.85 vs
+0.5, and Steel ($900) / Anchor ($6,000) at 0.9 vs 0.5. The multipliers are
+close but the prices are 8× and 6.7× apart. That is defensible — slow shrink and
+slow speed compound, so the stronger version is worth much more — but it is the
+kind of thing to sanity-check before Part 9 piles more entries onto the ladder.
+
+---
+
+## Part 9.2.2 — UI and design review
+
+Every scene booted and every text object measured from the live scene tree
+(rather than read off the source), so the numbers below are what actually
+renders.
+
+### The one that matters: the font floor
+
+12px text does not survive contact with a phone. Measured effective size after
+the layout scale is applied:
+
+| Device | 12px renders as |
+|---|---|
+| phone portrait / landscape | 6.50px |
+| phone large | 6.90px |
+| phone small Android | **6.00px** |
+| tiny legacy | **4.50px** |
+
+`AchievementsScene` is the worst offender and goes **below** the 12px that was
+measured:
+
+| Line | Size | Renders as (small Android) |
+|---|---|---|
+| `AchievementsScene.js:266` | 10px (category label) | **5.0px** |
+| `AchievementsScene.js:241` | 11px (progress `22 / 50`) | **5.5px** |
+| `AchievementsScene.js:219` | 13px (description) | **6.5px** |
+| `ShopScene` ability lines | 12px | 6.0px |
+| `TournamentBracketScene` team names | 12px | 6.0px |
+| `AccountScene` field labels | 13px | 6.5px |
+
+**Proposed floor: 16px authored.** That renders at ~8px on the worst device
+tested and ~9px on a large phone — still small, but legible. `AchievementsScene`
+needs the most work: 10px and 11px are carrying real information (category and
+progress) rather than decoration, and they are the parts a player actually reads
+to decide what to chase.
+
+This was raised as F-13 and declined. It is listed again because the numbers
+above are worse than the original report assumed — the floor is 10px, not 12px.
+
+### Bracket team names are truncated
+
+`TournamentBracketScene.js:339` shortens any team name over its max length:
+
+```js
+return name.length > maxLength ? name.substring(0, maxLength - 3) + '...' : name;
+```
+
+At 12px in a fixed column this renders as `Thunder Stri...`. Two problems: the
+ellipsis eats two of the few characters available, and Champions runs 32 teams,
+so the bracket is at its densest exactly when names get truncated. Raising the
+12px floor to 16px will make this worse before it makes it better — budget the
+column width at the same time, or drop the abbreviation for initials-only rivals.
+
+### Smaller items worth a pass
+
+- **Button label sizes are inconsistent.** Menu `TOURNAMENT` / `LEARN TO PLAY`
+  are 15px while the main `PLAY` / `SHOP` buttons are 20px+. The two small side
+  buttons read as secondary, which may be intended, but nothing in the layout
+  says they are a different tier.
+- **`ALREADY HAVE AN ACCOUNT` is 15px** (`AccountScene`) and is the only route
+  between the signup and login forms. The lowest-priority-looking element on
+  the screen is the one that has to be found.
+- **Repeated 12px ability text in the shop** — 14 near-identical lines at the
+  same unreadable size. Bumping the floor fixes legibility; grouping balls by
+  *kind* of ability (hitbox / speed / score / survival) would do more for
+  comprehension at that price point.
+- **No confirmation when a ball is equipped** beyond the `EQUIPPED` tag. A ball
+  change alters difficulty substantially (Void starts at minimum hitbox), and
+  nothing tells the player that is about to happen.
+
+### What is already right — don't regress it
+
+- Buttons are rounded `Graphics`, never square `Phaser.Rectangle`
+- Rotation on upright phones is correct at every aspect ratio tested, including
+  a 2400×400 letterbox slot, and input coordinates map correctly through the
+  rotation (all four corners verified in bounds)
+- iPhone notch safe area: painted area fits inside the insets
+- Every scene boots clean; no text overlaps a panel edge; no emoji anywhere
 
 ---
 
@@ -351,6 +556,17 @@ anything is pushed.
 
 ## Known bugs found while planning (not yet fixed)
 
+- **`TEST-RESULTS.md` F-07 and F-27 are wrong and must not be actioned.**
+  They report the Rubber Ball's `jumpMultiplier` as assigned-but-never-read and
+  its shop description as a false promise. Measured in play, the ball bounces
+  246px against the default's 162px. The audit missed the read at
+  `GameScene.js:719`. See **Part 9.2.1**. The real defect is the opposite one:
+  the copy says "25% higher" (the velocity) when the rise is 52%.
+- **`scoreRate` is dead state** (`GameScene.js:396`). Assigned, never read; the
+  comment claims `GameOverScene` reads it and it does not. The Money Ball works
+  via a separate direct read of `equippedBall`. See **Part 9.2.1**.
+- **Font floor is 10px, not 12px** — `AchievementsScene.js:266`. Renders at
+  5.0px on a small Android. See **Part 9.2.2**.
 - **Achievements header can go stale.** `AchievementsScene` renders the
   `UNCLAIMED` total once in `create()`. If anything unlocks an achievement
   afterwards, the header and the CLAIM ALL button show an outdated figure until

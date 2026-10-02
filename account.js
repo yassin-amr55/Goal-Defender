@@ -136,12 +136,10 @@
         catch (e) { return {}; }
     }
 
-    function localListOf(key) {
-        try {
-            var v = JSON.parse(localStorage.getItem(key) || '[]');
-            return Array.isArray(v) ? v : [];
-        } catch (e) { return []; }
-    }
+    /* localListOf() and unionLists() were only ever used to UNION the owned-ball
+     * list. Ball ownership now comes from the account outright (see mergeSave),
+     * because a union never removes - signing into a second account inherited
+     * every ball the first one owned. Both helpers are dead and removed. */
 
     /* Union of two JSON objects. Achievement entries are timestamps, so the
      * later one wins - either way the achievement stays unlocked. */
@@ -153,16 +151,6 @@
             var x = parseInt(out[k], 10), y = parseInt(b[k], 10);
             if (isFinite(x) && isFinite(y)) out[k] = String(Math.max(x, y));
             else if (out[k] === null) out[k] = b[k];
-        });
-        return out;
-    }
-
-    function unionLists(a, b) {
-        var seen = {};
-        var out = [];
-        [].concat(a || [], b || []).forEach(function (v) {
-            var k = String(v);
-            if (!seen[k]) { seen[k] = true; out.push(v); }
         });
         return out;
     }
@@ -207,26 +195,53 @@
             localStorage.setItem('gdTutorialDone', 'true');
         }
 
+        /* Ball ownership comes FROM the account, so the account wins outright.
+         *
+         * This used to be a union, like achievements. Union is right for
+         * achievements - unlocking one can only ever add - but it is wrong for
+         * purchases. Someone who signs out of their account and into a
+         * different one kept every ball the first account owned, because the
+         * union never removes. Free balls, on somebody else's account.
+         *
+         * The account's list replaces local storage, so signing in on a new
+         * phone restores exactly the balls that account bought - which is what
+         * the player expects - and switching accounts cannot leak purchases.
+         *
+         * An empty or missing cloud list is IGNORED rather than applied. A save
+         * that has not synced yet must never wipe the balls actually on the
+         * device; only a real list replaces anything.
+         */
+        if (cloud['goalDefenderOwnedBalls'] !== undefined && cloud['goalDefenderOwnedBalls'] !== null) {
+            var remoteBalls = cloud['goalDefenderOwnedBalls'];
+            // The cloud may hand back a parsed array or the raw JSON string,
+            // depending on how the document was written. Accept both.
+            if (typeof remoteBalls === 'string') {
+                try { remoteBalls = JSON.parse(remoteBalls); } catch (e) { remoteBalls = null; }
+            }
+            if (Array.isArray(remoteBalls) && remoteBalls.length) {
+                var list = remoteBalls.filter(function (id) { return typeof id === 'string' && id; });
+                /* 'default' is never bought - it is what every save starts with.
+                 * Keep it present so a save can never end up with no ball at all. */
+                if (list.indexOf('default') === -1) list.unshift('default');
+                localStorage.setItem('goalDefenderOwnedBalls', JSON.stringify(list));
+
+                /* An equipped ball the account does not own would render as a
+                 * ball the player never bought, so drop it back to default. */
+                var equipped = localStorage.getItem('goalDefenderEquippedBall');
+                if (equipped && list.indexOf(equipped) === -1) {
+                    localStorage.setItem('goalDefenderEquippedBall', 'default');
+                }
+            }
+        }
+
         UNIONS.forEach(function (k) {
             if (cloud[k] === undefined) return;
-            var merged;
-            if (k === 'goalDefenderOwnedBalls') {
-                /* The cloud may hand back either a parsed array or the raw JSON
-                 * string, depending on how the document was written. Accept
-                 * both, or the union silently produces garbage. */
-                var localList = localListOf(k);
-                var remoteList = cloud[k];
-                if (typeof remoteList === 'string') {
-                    try { remoteList = JSON.parse(remoteList); } catch (e) { remoteList = []; }
-                }
-                merged = unionLists(localList, remoteList);
-            } else {
-                var remoteObj = cloud[k];
-                if (typeof remoteObj === 'string') {
-                    try { remoteObj = JSON.parse(remoteObj); } catch (e) { remoteObj = {}; }
-                }
-                merged = unionObjects(jsonOf(k), remoteObj);
+            if (k === 'goalDefenderOwnedBalls') return;   // handled above, authoritatively
+            var remoteObj = cloud[k];
+            if (typeof remoteObj === 'string') {
+                try { remoteObj = JSON.parse(remoteObj); } catch (e) { remoteObj = {}; }
             }
+            var merged = unionObjects(jsonOf(k), remoteObj);
             if (merged && Object.keys(merged).length) localStorage.setItem(k, JSON.stringify(merged));
         });
 

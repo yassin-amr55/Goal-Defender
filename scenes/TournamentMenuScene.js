@@ -68,15 +68,25 @@
             ease: 'Sine.easeInOut'
         });
 
-        // Check if trophies are won
+        /* Whether the player has ever won the Qualifiers Cup.
+         *
+         * This single flag is the whole Champions Cup unlock. `championsWon` is
+         * deliberately NOT read here - winning Champions does not gate anything
+         * on this screen, and reading it made it look as though the two flags
+         * were interchangeable. Champions wins are tracked separately for the
+         * trophy room. */
         const qualifiersWon = localStorage.getItem('tournamentQualifiersWon') === 'true';
-        const championsWon = localStorage.getItem('tournamentChampionsWon') === 'true';
 
         // QUALIFIERS CUP CARD at (400, 350)
         this.createTournamentCard(400, 350, 'Qualifiers Cup', 'QUALIFIERS CUP', 'Round of 16', '', true, 'qualifiers', this);
 
-        // CHAMPIONS CUP CARD at (880, 350)
-        this.createTournamentCard(880, 350, 'Champions Cup', 'CHAMPIONS CUP', 'Round of 32', '', qualifiersWon, 'champions', this, qualifiersWon);
+        /* CHAMPIONS CUP CARD at (880, 350)
+         *
+         * Unlocked purely by having won the Qualifiers Cup at least once -
+         * not by a trophy count. `tournamentQualifiersWon` is set on the first
+         * win and is one of the keys synced with the account, so the unlock
+         * follows the player to a new device. */
+        this.createTournamentCard(880, 350, 'Champions Cup', 'CHAMPIONS CUP', 'Round of 32', '', qualifiersWon, 'champions', this);
 
         // TROPHIES button
         UI.button(this, {
@@ -130,7 +140,7 @@
         UI.topRight(this, {});
     }
 
-    createTournamentCard(x, y, title, displayTitle, description, difficulty, isUnlocked, mode, scene, isLockedChampions = false) {
+    createTournamentCard(x, y, title, displayTitle, description, difficulty, isUnlocked, mode, scene) {
         // Rounded card, 380x420
         UI.panel(this, {
             x: x, y: y, w: 380, h: 420, radius: 22,
@@ -167,13 +177,20 @@
             fontStyle: '700'
         }).setOrigin(0.5);
 
-        // Add small unlock text for Champions Cup
+        /* Small status line under the Champions Cup title.
+         *
+         * The wording used to be a fixed string and only the COLOUR changed with
+         * the state, so a player who had already won the Qualifiers Cup - the
+         * cup was playable, the PLAY button lit - was still told "Win the
+         * Qualifiers Cup to unlock". It read as a bug and made players doubt a
+         * unlock they had earned. The line now states the actual state. */
         if (mode === 'champions') {
-            this.add.text(x, y + 32, 'Win the Qualifiers Cup to unlock', {
-                fontSize: '13px',
-                color: isUnlocked ? '#7f8c99' : '#ff8a8a',
-                fontStyle: '700'
-            }).setOrigin(0.5);
+            this.add.text(x, y + 32,
+                isUnlocked ? 'Unlocked' : 'Win the Qualifiers Cup to unlock', {
+                    fontSize: '13px',
+                    color: isUnlocked ? '#7f8c99' : '#ff8a8a',
+                    fontStyle: '700'
+                }).setOrigin(0.5);
         }
 
         // PLAY button

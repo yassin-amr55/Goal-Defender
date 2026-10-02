@@ -212,9 +212,17 @@ class LeaderboardScene extends Phaser.Scene {
                 fontFamily: UI.FAMILY, fontStyle: '900'
             }).setOrigin(0.5));
 
-            container.add(this.add.text(308, y, row.name || 'PLAYER', {
-                fontSize: '24px', color: '#ffffff',
-                fontFamily: UI.FAMILY, fontStyle: '800'
+            /* My row shows YOU instead of my name; everyone else shows theirs.
+             *
+             * Drawing the username AND a "YOU" tag meant the player's own row
+             * read "YOU yassin" - two labels for one thing, with the tag
+             * crowding the name because both sat in the same few pixels.
+             * Replacing the name rather than adding to it also means the
+             * longest username on the board cannot push into the score column. */
+            const mine = this.isMine(row);
+            container.add(this.add.text(308, y, mine ? 'YOU' : (row.name || 'PLAYER'), {
+                fontSize: '24px', color: mine ? '#3ddc6b' : '#ffffff',
+                fontFamily: UI.FAMILY, fontStyle: '900'
             }).setOrigin(0, 0.5));
 
             const value = this.tab === 'highScore' ? row.highScore : row.trophies;
@@ -226,20 +234,12 @@ class LeaderboardScene extends Phaser.Scene {
                 fontFamily: UI.FAMILY, fontStyle: '900'
             }).setOrigin(1, 0.5));
 
-            /* Mark the signed-in player's own row.
-             *
-             * With no highlight there was no way to find yourself on a board of
-             * near-identical rows - and while old anonymous rows shared a name
-             * with an account row, the duplicate was impossible to tell apart.
-             * The tint sits under the text and a "YOU" tag sits in the gap
-             * between the rank and the name, so nothing moves. */
-            if (this.isMine(row, i)) {
+            /* The player's own row gets a green tint behind it. The name itself already
+             * says YOU (above), so there is no second label to collide with the
+             * rank number. */
+            if (mine) {
                 container.addAt(this.add.rectangle(
                     640, y, 860 - this.rowInset * 2, rowH - 6, 0x3ddc6b, 0.13), 0);
-                container.add(this.add.text(300, y, 'YOU', {
-                    fontSize: '13px', color: '#3ddc6b',
-                    fontFamily: UI.FAMILY, fontStyle: '900'
-                }).setOrigin(0.5));
             } else if (i % 2 === 0) {
                 // Zebra stripe spans the inner panel only, never the border.
                 container.addAt(this.add.rectangle(
