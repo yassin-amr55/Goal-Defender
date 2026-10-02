@@ -76,6 +76,21 @@ class BootScene extends Phaser.Scene {
             }, 500);
         }
         
+        /* Restore the account session on load.
+         *
+         * This was never called, which is why a signed-in player was logged out
+         * every single refresh: the Firebase session survived in the browser but
+         * nothing ever asked for it, so the game started anonymous and showed
+         * SIGN IN.
+         *
+         * Deliberately NOT awaited. BootScene must not sit on a network round
+         * trip - a leaderboard or account outage can never be allowed to stop
+         * the game starting. MenuScene re-checks once the restore lands and
+         * updates the account slot in place. */
+        if (window.GDAccount && window.GDAccount.restore) {
+            window.GDAccount.restore();
+        }
+
         // First launch asks for a name; after that go straight to the menu so the
         // player is never asked twice. GDPlayer stores the default on SKIP, so
         // hasName() is true even for someone who skipped.

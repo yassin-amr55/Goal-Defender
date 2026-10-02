@@ -208,12 +208,7 @@
         // Publish to the leaderboard. Fire-and-forget: submit() swallows its
         // own failures and returns a promise nobody awaits, so the menu never
         // waits on the network.
-        //
-        // ?noleaderboard suppresses the write. That is how screenshots and QA
-        // are taken without planting fake entries on the public board.
-        if (window.GDPlayer && !/[?&]noleaderboard\b/.test(location.search)) {
-            window.GDPlayer.submit();
-        }
+        MenuScene.publish();
 
         // Push any local progress to the signed-in account. Debounced, so
         // bouncing through the menu does not hammer Firestore.
@@ -230,8 +225,22 @@
             window.GDAccount.onChange(() => {
                 const s = window.game && window.game.scene.getScene('MenuScene');
                 if (s && s.scene.isActive()) s.refreshAccountSlot();
+                /* Signing in or restoring changes WHICH identity we publish
+                 * under, and possibly the name too, so the board has to be
+                 * rewritten. Without this a player who signed in kept the row
+                 * written under their old anonymous id, and their account
+                 * progress never appeared on the board at all. */
+                MenuScene.publish();
             });
         }
+    }
+
+    /* Single place that writes to the leaderboard, so the "?noleaderboard"
+     * escape hatch cannot be bypassed by a second call site. */
+    static publish() {
+        if (!window.GDPlayer) return;
+        if (/[?&]noleaderboard\b/.test(location.search)) return;
+        window.GDPlayer.submit({ force: true });
     }
 
     /* Outlined text control for the account slot: no background, just a bright

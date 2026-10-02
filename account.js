@@ -68,6 +68,125 @@
         });
     }
 
+    /* Merge a cloud save into local storage instead of overwriting it.
+     *
+     * The cloud copy used to be applied wholesale, which silently destroyed
+     * progress: play a run, close the tab before the 1.5s debounce fires, come
+     * back later, and the reload replaced your newer local save with the older
+     * cloud one. Your money and best score went backwards with no warning.
+     *
+     * Every cumulative stat here only ever goes UP, and the two list-shaped
+     * keys are sets that only ever grow, so taking the better of each is
+     * always correct and can never invent progress:
+     *
+     *   - money, deflections, speed boost, wins, high score -> the larger value
+     *   - owned balls, unlocked/claimed achievements    -> the union
+     *   - equipped ball                                   -> whichever device
+     *   - player name                                     -> the account name
+     */
+    var MONOTONE_NUMBERS = [
+        'goalDefenderMoney',
+        'goalDefenderHighScore',
+        'goalDefenderDeflections',
+        'goalDefenderMaxSpeedBoost',
+        'goalDefenderTournamentWins',
+        'goalDefenderQualifiersWins',
+        'goalDefenderChampionsWins',
+        'goalDefenderTournamentsPlayed',
+        'tournamentQualifiersWinCount',
+        'tournamentChampionsWinCount'
+    ];
+
+    var UNIONS = [
+        'goalDefenderOwnedBalls',
+        'gdAchievements',
+        'gdAchievementsClaimed'
+    ];
+
+    function numOf(key) {
+        var v = parseInt(localStorage.getItem(key) || '', 10);
+        return isFinite(v) && v >= 0 ? v : 0;
+    }
+
+    function jsonOf(key) {
+        try { return JSON.parse(localStorage.getItem(key) || '{}'); }
+        catch (e) { return {}; }
+    }
+
+    function localListOf(key) {
+        try {
+            var v = JSON.parse(localStorage.getItem(key) || '[]');
+            return Array.isArray(v) ? v : [];
+        } catch (e) { return []; }
+    }
+
+    /* Union of two JSON objects. Achievement entries are timestamps, so the
+     * later one wins - either way the achievement stays unlocked. */
+    function unionObjects(a, b) {
+        var out = {};
+        Object.keys(a || {}).forEach(function (k) { out[k] = a[k]; });
+        Object.keys(b || {}).forEach(function (k) {
+            if (out[k] === undefined) { out[k] = b[k]; return; }
+            var x = parseInt(out[k], 10), y = parseInt(b[k], 10);
+            if (isFinite(x) && isFinite(y)) out[k] = String(Math.max(x, y));
+            else if (out[k] === null) out[k] = b[k];
+        });
+        return out;
+    }
+
+    function unionLists(a, b) {
+        var seen = {};
+        var out = [];
+        [].concat(a || [], b || []).forEach(function (v) {
+            var k = String(v);
+            if (!seen[k]) { seen[k] = true; out.push(v); }
+        });
+        return out;
+    }
+
+    function mergeSave(cloud) {
+        if (!cloud) return;
+
+        MONOTONE_NUMBERS.forEach(function (k) {
+            if (cloud[k] === undefined) return;
+            var remote = parseInt(cloud[k], 10);
+            if (!isFinite(remote) || remote < 0) return;      // ignore junk
+            if (remote > numOf(k)) localStorage.setItem(k, String(remote));
+        });
+
+        UNIONS.forEach(function (k) {
+            if (cloud[k] === undefined) return;
+            var merged;
+            if (k === 'goalDefenderOwnedBalls') {
+                /* The cloud may hand back either a parsed array or the raw JSON
+                 * string, depending on how the document was written. Accept
+                 * both, or the union silently produces garbage. */
+                var localList = localListOf(k);
+                var remoteList = cloud[k];
+                if (typeof remoteList === 'string') {
+                    try { remoteList = JSON.parse(remoteList); } catch (e) { remoteList = []; }
+                }
+                merged = unionLists(localList, remoteList);
+            } else {
+                var remoteObj = cloud[k];
+                if (typeof remoteObj === 'string') {
+                    try { remoteObj = JSON.parse(remoteObj); } catch (e) { remoteObj = {}; }
+                }
+                merged = unionObjects(jsonOf(k), remoteObj);
+            }
+            if (merged && Object.keys(merged).length) localStorage.setItem(k, JSON.stringify(merged));
+        });
+
+        // Preference, not a total: whatever this device had equipped stands.
+        if (cloud['goalDefenderEquippedBall'] && !localStorage.getItem('goalDefenderEquippedBall')) {
+            localStorage.setItem('goalDefenderEquippedBall', cloud['goalDefenderEquippedBall']);
+        }
+        // The account name is authoritative.
+        if (currentAccount && currentAccount.username) {
+            localStorage.setItem('gdPlayerName', currentAccount.username);
+        }
+    }
+
     function err(e) {
         return { ok: false, error: friendlyError(e) };
     }
@@ -210,6 +329,65 @@
         };
     }
 
+    /* Who is signed in, if anyone?
+     *
+     * The old code called auth.getCurrentUser(), which does NOT exist in the
+     * Firebase compat SDK v10 that player.js loads. It threw
+     *
+     *   TypeError: auth.getCurrentUser is not a function
+     *
+     * inside restore(), whose .catch() then reported "signed out". So even once
+     * restore() was wired up it silently failed, and the player was logged out
+     * on every single refresh - the exact symptom being reported.
+     *
+     * auth.currentUser is the synchronous, supported equivalent. getCurrentUser
+     * is kept only as a fallback for an older SDK, and only if it is a function.
+     */
+    function currentFirebaseUser() {
+        var auth = window.firebase && window.firebase.auth ? window.firebase.auth() : null;
+        if (!auth) return null;
+        if (auth.currentUser) return Promise.resolve(auth.currentUser);
+        if (typeof auth.getCurrentUser === 'function') {
+            try { return Promise.resolve(auth.getCurrentUser()); }
+            catch (e) { return Promise.resolve(null); }
+        }
+        return Promise.resolve(null);
+    }
+
+    /* Wait until Firebase has finished restoring any persisted session before
+     * deciding whether anyone is signed in.
+     *
+     * auth.currentUser is null for a short window after page load even when a
+     * session exists on disk. Reading it immediately made the game conclude
+     * "signed out" on every single refresh. onAuthStateChanged fires exactly
+     * once with the settled answer, so that is the signal to wait for. The
+     * timeout means a player offline or blocked by an ad blocker still reaches
+     * the menu - they just appear signed out, which is honest.
+     */
+    function waitForAuthSettled() {
+        var auth = window.firebase && window.firebase.auth ? window.firebase.auth() : null;
+        if (!auth) return Promise.resolve(null);
+        if (auth.currentUser) return Promise.resolve(auth.currentUser);
+
+        return new Promise(function (resolve) {
+            var done = false;
+            function finish(user) {
+                if (done) return;
+                done = true;
+                resolve(user || null);
+            }
+            try {
+                var unsub = auth.onAuthStateChanged(function (user) {
+                    try { if (typeof unsub === 'function') unsub(); } catch (e) { }
+                    finish(user);
+                });
+            } catch (e) {
+                finish(null);
+            }
+            setTimeout(function () { finish(null); }, 6000);
+        });
+    }
+
     /* Did the Firestore read fail because the security rules have not been
      * published yet? Authentication is a separate service, so the sign-in
      * genuinely succeeded - this must never be reported as a failed login. */
@@ -228,10 +406,12 @@ function afterAuth(user, typedUsername) {
         return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid).get()
             .then(function (snap) {
                 if (snap.exists) {
-                    // Returning player: the account wins. This replaces whatever
-                    // is in this browser with the account's saved progress.
+                    // Returning player. The account is the source of truth for
+                    // the name, but the SAVE is merged rather than applied
+                    // wholesale - see mergeSave(). Overwriting meant progress
+                    // made since the last sync silently disappeared.
                     applyAccount(snap);
-                    writeSave(currentAccount.save);
+                    mergeSave(currentAccount.save);
                     return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid)
                         .set({ lastLogin: ts() },
                             { merge: true })
@@ -349,10 +529,10 @@ function afterAuth(user, typedUsername) {
     function signOut() {
         // Deliberately NOT flushing here. Anything played while signed out
         // belongs to the device, not the account - and on the next sign-in the
-        // account's progress replaces it, which is the whole point. Flushing
-        // on sign-out would let local scribbles overwrite the account.
-        // Progress made while signed in is pushed on a debounce and on page
-        // hide (see the listener installed below).
+        // account's progress is MERGED in (see mergeSave), which is the whole
+        // point. Flushing on sign-out would let local scribbles overwrite the
+        // account. Progress made while signed in is pushed on a debounce and on
+        // page hide (see the listener installed below).
         return Promise.resolve()
             .then(function () {
                 if (window.firebase && window.firebase.auth) {
@@ -406,13 +586,48 @@ function afterAuth(user, typedUsername) {
         }
         var name = P.sanitize(raw);
         if (!name) return Promise.resolve({ ok: false, error: 'Enter a name.' });
-        localStorage.setItem('gdAccountNameChangedAt', String(Date.now()));
-        currentAccount.username = name;
+
+        /* currentAccount can legitimately be null here: the sign-in succeeded
+         * but reading the account document failed (offline, or the rules were
+         * not published yet). The old code did
+         *
+         *     currentAccount.username = name;
+         *
+         * which threw "Cannot set properties of null (setting 'username')" and
+         * left the rename half-applied - the cooldown timer was already set, so
+         * the player was then locked out of renaming for a week having changed
+         * nothing. Build the object instead of mutating one that may not exist,
+         * and only start the cooldown once the write has actually succeeded.
+         */
+        var previous = currentAccount;
+        currentAccount = {
+            uid: currentUser.uid,
+            username: name,
+            createdAt: previous ? previous.createdAt : null,
+            lastLogin: previous ? previous.lastLogin : null,
+            save: previous ? previous.save : null
+        };
         P.setName(name);
-        return flush().then(function () {
-            emit();
-            return { ok: true, username: name };
-        });
+
+        return P.firestore().collection(ACCOUNT_COLLECTION).doc(currentUser.uid)
+            .set({ username: name, updatedAt: ts() }, { merge: true })
+            .then(function () {
+                // Only now does the rename count.
+                localStorage.setItem('gdAccountNameChangedAt', String(Date.now()));
+                // Push the rest of the save too, so the board and the account
+                // agree immediately rather than on the next debounce.
+                return flush();
+            })
+            .then(function () {
+                emit();
+                return { ok: true, username: name };
+            })
+            .catch(function (e) {
+                // Roll the local name back so the UI matches the cloud.
+                currentAccount = previous;
+                if (previous) P.setName(previous.username);
+                return err(e);
+            });
     }
 
     /* ---------------- stats for the account page ---------------- */
@@ -439,7 +654,7 @@ function afterAuth(user, typedUsername) {
         if (!P.isConfigured()) return Promise.resolve({ ok: true, skipped: 'not-configured' });
         return P.loadSdk().then(function () {
             if (!window.firebase || !window.firebase.auth) return null;
-            return window.firebase.auth().getCurrentUser();
+            return waitForAuthSettled();
         }).then(function (user) {
             if (!user) return { ok: true, signedOut: true };
             return afterAuth(user);
