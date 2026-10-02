@@ -11,7 +11,7 @@ Tournament mode is a single-elimination bracket system where the player competes
 **Location:** Next to PLAY and SHOP buttons (horizontal layout)
 **Positions:**
 - PLAY button: (440, 420) - 250×80px
-- SHOP button: (640, 420) - 250×80px  
+- SHOP button: (640, 420) - 250×80px
 - TOURNAMENT button: (840, 420) - 250×80px
 
 **Tournament Button Design:**
@@ -97,11 +97,11 @@ TOURNAMENT MODE (title at y=100)
 
 [QUALIFIERS CUP CARD]    [CHAMPIONS CUP CARD]
      (x=400, y=350)           (x=880, y=350)
-     
+
 Each card contains:
 - Trophy image at top (y=250)
 - Title (y=340)
-- Description (y=370) 
+- Description (y=370)
 - Difficulty (y=400)
 - PLAY button (y=480)
 ```
@@ -244,7 +244,7 @@ this.load.image('champions-trophy', 'assets/champions-trophie.png');
   - 42px white text
   - Only enabled when name length > 0
   - Click: Save team name, start TournamentBracketScene with mode
-  
+
 - **BACK** button at (640, 570)
   - 200×60px gray rectangle
   - 32px white text
@@ -401,7 +401,7 @@ const championsBracket = {
 
 ### Scene: TournamentGameScene
 
-**Receives Parameters:** 
+**Receives Parameters:**
 - tournamentMode ('qualifiers' or 'champions')
 - currentRound (string)
 - opponentName (string)
@@ -513,11 +513,11 @@ const championsBracket = {
 - **Top Left:**
   - Speed boost: "Speed Boost: X%"
   - Hitbox countdown: "Hitbox shrinks in: Xs"
-  
+
 - **Top Center:**
   - Round name: "ROUND OF 16" (or current round)
   - Team name: "YOUR TEAM NAME"
-  
+
 - **Top Right:**
   - **Score counter: "Score: X / Y"** (Y = required to win)
   - Mute button below score
@@ -673,7 +673,7 @@ if (mode === 'qualifiers') {
 - [x] Add "TOURNAMENT MODE" title at (640, 100)
 - [x] Create Qualifiers Cup card at (400, 350) - UNDER title
 - [x] Use qualifiers-trophie.png image (not emoji) at top of card
-- [x] Create Champions Cup card at (880, 350) - UNDER title  
+- [x] Create Champions Cup card at (880, 350) - UNDER title
 - [x] Use champions-trophie.png image (not emoji) at top of card
 - [x] Add lock overlay and unlock logic for Champions Cup
 - [x] Add TROPHIES button (top right)
@@ -866,7 +866,7 @@ if (clickWithinHitbox && ballMovingLeft) {
   // Deflect toward RIGHT goal (opponent's)
   ball.setVelocity(ballSpeed, upwardSpeed);
   deflectCounter++;
-  
+
   // Check if goal reached
   if (deflectCounter >= requiredDeflects) {
     allowGoal = true; // Ball can now enter opponent's goal
@@ -899,7 +899,7 @@ if (ball.x > 1200 && allowGoal) {
 function advanceBracket(playerTeam, opponentTeam) {
   // Mark winner in current round
   currentMatch.winner = playerTeam;
-  
+
   // Move to next round
   if (currentRound === 'roundOf16') {
     // Add to quarter finals
@@ -915,7 +915,7 @@ function advanceBracket(playerTeam, opponentTeam) {
     // Tournament won!
     triggerTournamentVictory();
   }
-  
+
   // Save progress
   localStorage.setItem('tournamentRound', nextRound);
   localStorage.setItem('tournamentBracket', JSON.stringify(bracket));

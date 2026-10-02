@@ -139,7 +139,40 @@ class AccountScene extends Phaser.Scene {
             onClick: () => this.close()
         });
 
-        this.events.on('shutdown', () => this.clearTab());
+        this.events.on('shutdown', () => {
+            this.clearTab();
+            /* Drop the change listener with the scene. The account module keeps
+             * listeners in a module-level array with no lifetime of its own, so
+             * a listener registered per open and never removed would outlive
+             * the scene and fire against a dead object on every future sync. */
+            if (this._offAccountChange) {
+                this._offAccountChange();
+                this._offAccountChange = null;
+            }
+        });
+
+        /* Re-render the account page when anything changes underneath it.
+         *
+         * The stats here are a snapshot taken when the page opened. Claiming an
+         * achievement, finishing a tournament or a completed sync all announce
+         * a change, and without this the numbers sat there stale until the
+         * player closed and reopened the page - which reads as the account
+         * being broken rather than out of date.
+         *
+         * Registered per scene instance, not once for the class: an earlier
+         * version guarded the registration with a static flag, which meant the
+         * FIRST account page ever opened got the listener and every page after
+         * it silently did not.
+         *
+         * Guarded on the account tab: re-rendering while a form is open would
+         * wipe the fields the player is typing into. */
+        if (window.GDAccount) {
+            this._offAccountChange = window.GDAccount.onChange(() => {
+                if (this.tab !== 'account') return;
+                if (!this.scene || !this.scene.isActive()) return;
+                this.renderAccount();
+            });
+        }
 
         this.setTab((window.GDAccount && window.GDAccount.isSignedIn()) ? 'account' : this.tab);
     }
@@ -399,6 +432,23 @@ class AccountScene extends Phaser.Scene {
     /* ---------------- ACCOUNT ---------------- */
 
     renderAccount() {
+        /* Tear down whatever this function built last time before building it
+         * again.
+         *
+         * renderAccount() APPENDS to tabObjects - every row, divider and button
+         * is created fresh and tracked for disposal. That is fine when it runs
+         * once per page open, because setTab() clears first. It is not fine
+         * when it runs as a live refresh: a re-render stacked a second complete
+         * copy of the panel on top of the first, so the old figures stayed on
+         * screen directly above the new ones and the page grew every time
+         * anything synced. Clearing here makes this function a genuine
+         * re-render rather than an append.
+         *
+         * The subtitle and the tab chrome are not owned by this function, so
+         * they survive. There are no input fields on the account tab, so
+         * clearing cannot discard anything the player was typing. */
+        this.clearTab();
+
         const A = window.GDAccount;
         const st = A.localStats();
         const fmt = (n) => window.Achievements.fmt(n);

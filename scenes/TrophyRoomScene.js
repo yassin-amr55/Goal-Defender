@@ -4,12 +4,11 @@
     }
 
     create() {
-        console.log('TrophyRoomScene created');
-        
+
         const groundHeight = 100;
         const groundY = 720;
         const groundTopY = groundY - groundHeight;
-        
+
         // Dark background (stadium with dark overlay, alpha 0.9)
         if (this.textures.exists('background')) {
             const bg = this.add.image(640, 0, 'background');
@@ -40,8 +39,8 @@
         }
 
         // Get trophy data from localStorage
-        const qualifiersWinCount = parseInt(localStorage.getItem('tournamentQualifiersWinCount') || '0');
-        const championsWinCount = parseInt(localStorage.getItem('tournamentChampionsWinCount') || '0');
+        const qualifiersWinCount = parseInt(localStorage.getItem('tournamentQualifiersWinCount') || '0', 10);
+        const championsWinCount = parseInt(localStorage.getItem('tournamentChampionsWinCount') || '0', 10);
         const totalTrophies = qualifiersWinCount + championsWinCount;
 
         // Title: "TROPHIES: X" at (640, 60)
@@ -80,18 +79,18 @@
         // Display trophies
         // Qualifiers Trophy (Left Shelf)
         this.createTrophyDisplay(
-            400, 
-            'Qualifiers Cup', 
-            'qualifiers-trophy', 
+            400,
+            'Qualifiers Cup',
+            'qualifiers-trophy',
             qualifiersWinCount,
             localStorage.getItem('tournamentQualifiersDate')
         );
 
         // Champions Trophy (Right Shelf)
         this.createTrophyDisplay(
-            880, 
-            'Champions Cup', 
-            'champions-trophy', 
+            880,
+            'Champions Cup',
+            'champions-trophy',
             championsWinCount,
             localStorage.getItem('tournamentChampionsDate'),
             true
@@ -131,7 +130,7 @@
         if (this.textures.exists(trophyImageKey)) {
             trophyImage = this.add.image(x, 280, trophyImageKey);
             trophyImage.setScale(0.4);
-            
+
             if (!isWon) {
                 // Grayscale filter for unwon trophies
                 trophyImage.setTint(0x888888);

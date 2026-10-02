@@ -50,9 +50,22 @@
             strokeThickness: 6
         }).setOrigin(0.5);
 
-        // Panel grows to hold the name row: every control must live INSIDE it.
+        /* The player name row only exists when signed OUT, so the panel is
+         * sized to what is actually on screen. It used to be a fixed height,
+         * which left a wide empty band at the bottom once the row was hidden -
+         * four controls floating in a panel built for five. */
+        const account = window.GDAccount;
+        const signedIn = !!(account && account.isSignedIn());
+        const showNameRow = !signedIn;
+
+        // Both cases keep every control comfortably inside the border.
+        //   signed out: rows end at 468, name button ends at 555 -> 114..586
+        //   signed in:  rows end at 468                    -> 114..508
+        const panelH = showNameRow ? 472 : 394;
+        const panelY = showNameRow ? 350 : 311;
+
         UI.panel(this, {
-            x: 640, y: 344, w: 800, h: 452, radius: 24,
+            x: 640, y: panelY, w: 800, h: panelH, radius: 24,
             fillTop: 0x1f2c3d, fillBottom: 0x121c28,
             border: 0x4a6a8a, borderWidth: 2
         });
@@ -67,8 +80,7 @@
         /* ---------------- player name ----------------
          * Hidden while signed in: the account owns the name then, and it is
          * changed from the account page (throttled to once a week). */
-        const account = window.GDAccount;
-        if (!account || !account.isSignedIn()) {
+        if (showNameRow) {
             const currentName = window.GDPlayer ? window.GDPlayer.getName() : 'PLAYER';
             this.add.text(640, 500, 'PLAYER NAME', {
                 fontSize: '15px', color: '#8fa6bd', fontStyle: '800'

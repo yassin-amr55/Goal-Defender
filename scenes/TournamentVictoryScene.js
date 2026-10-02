@@ -20,7 +20,7 @@ class TournamentVictoryScene extends Phaser.Scene {
         this.cameras.main.setBackgroundColor('#0a0a0a');
 
         const teamName = localStorage.getItem('tournamentTeamName') || 'Your Team';
-        
+
         if (this.result === 'victory') {
             // Victory display
             // Trophy image
@@ -69,7 +69,7 @@ class TournamentVictoryScene extends Phaser.Scene {
             // Defeat display
             this.add.text(640, 200, 'TOURNAMENT LOST', { fontSize: '44px', fill: '#ff4444' }).setOrigin(0.5);
             this.add.text(640, 260, teamName, { fontSize: '26px', fill: '#ffffff' }).setOrigin(0.5);
-            
+
             // Show which round they lost in
             const currentRound = localStorage.getItem('tournamentRound') || 'roundOf16';
             let roundName = currentRound;
@@ -78,7 +78,7 @@ class TournamentVictoryScene extends Phaser.Scene {
             else if (roundName === 'quarterFinals') roundName = 'Quarter Finals';
             else if (roundName === 'semiFinals') roundName = 'Semi Finals';
             else if (roundName === 'finals') roundName = 'Finals';
-            
+
             this.add.text(640, 320, `Eliminated in: ${roundName}`, { fontSize: '24px', fill: '#ffaa00' }).setOrigin(0.5);
             this.add.text(640, 356, `Matches Won: ${this.stats.matchesWon || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
             this.add.text(640, 388, `Total Deflects: ${this.stats.totalDeflects || 0}`, { fontSize: '22px', fill: '#fff' }).setOrigin(0.5);
@@ -109,16 +109,16 @@ class TournamentVictoryScene extends Phaser.Scene {
             // defeat can never pay out.
             const prize = GD_TROPHY_PRIZE[this.mode] || 0;
             if (prize > 0) {
-                const balance = parseInt(localStorage.getItem('goalDefenderMoney') || '0');
+                const balance = parseInt(localStorage.getItem('goalDefenderMoney') || '0', 10);
                 localStorage.setItem('goalDefenderMoney', String(balance + prize));
             }
 
             if (this.mode === 'qualifiers') {
-                const count = parseInt(localStorage.getItem('tournamentQualifiersWinCount') || '0');
+                const count = parseInt(localStorage.getItem('tournamentQualifiersWinCount') || '0', 10);
                 localStorage.setItem('tournamentQualifiersWinCount', (count + 1).toString());
                 localStorage.setItem('tournamentQualifiersWon', 'true');
             } else {
-                const count = parseInt(localStorage.getItem('tournamentChampionsWinCount') || '0');
+                const count = parseInt(localStorage.getItem('tournamentChampionsWinCount') || '0', 10);
                 localStorage.setItem('tournamentChampionsWinCount', (count + 1).toString());
                 localStorage.setItem('tournamentChampionsWon', 'true');
             }

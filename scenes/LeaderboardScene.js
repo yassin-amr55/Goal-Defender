@@ -162,6 +162,20 @@ class LeaderboardScene extends Phaser.Scene {
 
     rowHeight() { return 52; }
 
+    /* Is this row the signed-in player?
+     *
+     * fetchBoard() does not return document ids, so identity is matched on the
+     * name the board publishes. When an account is signed in that name is the
+     * account username (player.js boardName()), which is unique per account, so
+     * this cannot highlight somebody else's row. Signed out, there is no "me"
+     * to mark - an anonymous row is shared by every player without an account. */
+    isMine(row) {
+        if (!window.GDAccount || !window.GDAccount.isSignedIn()) return false;
+        var mine = window.GDAccount.username();
+        if (!mine) return false;
+        return row && row.name === mine;
+    }
+
     render() {
         this.listLayer.removeAll(true);
 
@@ -212,7 +226,21 @@ class LeaderboardScene extends Phaser.Scene {
                 fontFamily: UI.FAMILY, fontStyle: '900'
             }).setOrigin(1, 0.5));
 
-            if (i % 2 === 0) {
+            /* Mark the signed-in player's own row.
+             *
+             * With no highlight there was no way to find yourself on a board of
+             * near-identical rows - and while old anonymous rows shared a name
+             * with an account row, the duplicate was impossible to tell apart.
+             * The tint sits under the text and a "YOU" tag sits in the gap
+             * between the rank and the name, so nothing moves. */
+            if (this.isMine(row, i)) {
+                container.addAt(this.add.rectangle(
+                    640, y, 860 - this.rowInset * 2, rowH - 6, 0x3ddc6b, 0.13), 0);
+                container.add(this.add.text(300, y, 'YOU', {
+                    fontSize: '13px', color: '#3ddc6b',
+                    fontFamily: UI.FAMILY, fontStyle: '900'
+                }).setOrigin(0.5));
+            } else if (i % 2 === 0) {
                 // Zebra stripe spans the inner panel only, never the border.
                 container.addAt(this.add.rectangle(
                     640, y, 860 - this.rowInset * 2, rowH - 6, 0xffffff, 0.04), 0);

@@ -28,6 +28,20 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    /* Anonymous auth is the LEADERBOARD's identity - it gives every visitor an
+     * id with no login wall. It must NOT be enough to own an account document.
+     *
+     * The client now refuses to create an account for an anonymous session
+     * (see restore() and afterAuth() in account.js). That is a courtesy, not a
+     * defence: anyone can call firebase.firestore() from the console, so the
+     * rule has to be here too. Without it, one junk account document per
+     * visitor was creatable, each holding a copy of their local save - and
+     * accounts is owner-only, so nobody could list or remove them. */
+    function isRealUser() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     function isInt(v) {
       return v is int;
     }
@@ -43,8 +57,8 @@ service cloud.firestore {
      * map is capped so an account document cannot be used as free storage. */
     match /accounts/{uid} {
       allow read:   if isOwner(uid);
-      allow create: if isOwner(uid) && validAccount();
-      allow update: if isOwner(uid) && validAccount();
+      allow create: if isRealUser() && isOwner(uid) && validAccount();
+      allow update: if isRealUser() && isOwner(uid) && validAccount();
       allow delete: if false;
 
       function validAccount() {
@@ -55,7 +69,24 @@ service cloud.firestore {
         && request.resource.data.username.size() >= 1
         && request.resource.data.username.size() <= 14
         && request.resource.data.save is map
-        && request.resource.data.save.size() <= 20;
+        /* Cap the save map so an account cannot be used as free storage.
+         *
+         * This was 20 while account.js whitelisted 15 keys, so it had real
+         * headroom. Then SAVE_KEYS grew to 26 (the tournament and tutorial
+         * keys were added so a bracket survives a device change) and the cap
+         * became a live bug: a player with a full save - anyone who owns a
+         * ball or has won a cup - crossed 20 and EVERY account write was
+         * denied. Sign-up, sync and rename all failed with permission-denied
+         * for exactly the players who had played the most, and it would have
+         * looked like the account system was broken rather than the cap being
+         * stale.
+         *
+         * 40 leaves room for the keys above to grow again without touching
+         * this file, while still bounding the document. The hasOnly() list
+         * above is what actually limits WHICH keys may be written; this only
+         * caps how many. Keep the two in step: check SAVE_KEYS in account.js
+         * when adding a synced key. */
+        && request.resource.data.save.size() <= 40;
       }
     }
 
@@ -67,6 +98,9 @@ service cloud.firestore {
      * board. */
     match /players/{playerId} {
       allow read: if true;
+      // isOwner() rather than isRealUser(): the leaderboard is deliberately
+      // anonymous, and a signed-in player publishes under their ACCOUNT uid so
+      // one person is always exactly one row.
       allow create: if isOwner(playerId)
                     && validFields()
                     && validSize();

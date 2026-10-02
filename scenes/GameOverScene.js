@@ -17,7 +17,7 @@
         const groundHeight = 100;
         const groundY = 720;
         const groundTopY = groundY - groundHeight;
-        
+
         // Background image (sky) - positioned so bottom aligns with top of ground
         if (this.textures.exists('background')) {
             const bg = this.add.image(640, 0, 'background');
@@ -49,7 +49,7 @@
         const deflections = this.finalDeflections || this.finalScore;
         const rate = (this.equippedBall === 'money') ? 5 : 3;
         const moneyEarned = deflections * rate;
-        const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0);
+        const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0, 10);
         const newTotal = currentMoney + moneyEarned;
         localStorage.setItem('goalDefenderMoney', newTotal);
 
@@ -128,13 +128,12 @@
         // Mute/Unmute button
         this.createMuteButton();
 
-        console.log('GameOverScene loaded with score:', this.finalScore);
     }
 
     createMuteButton() {
         const x = 1230;
         const y = 30;
-        
+
         // Create the mute button sprite
         this.muteButton = this.add.image(x, y, window.Settings.isOn('gdMuted') ? 'volume-mute' : 'volume-unmute');
         this.muteButton.setScale(0.08);

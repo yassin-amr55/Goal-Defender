@@ -18,8 +18,7 @@ class BootScene extends Phaser.Scene {
         });
 
         // Load all game assets
-        console.log('Loading assets...');
-        
+
         // Main assets
         this.load.image('background', 'assets/background.png');
         this.load.image('ground', 'assets/ground.png');
@@ -27,7 +26,7 @@ class BootScene extends Phaser.Scene {
         this.load.image('ball_default', 'assets/ball.png');
         this.load.image('goal', 'assets/goal.png');
         this.load.image('wall', 'assets/new-wall.png');
-        
+
         // PHASE 10: Ball skins
         this.load.image('ball_golden', 'assets/balls/ball-golden.png');
         this.load.image('ball_fire', 'assets/balls/ball-fire.png');
@@ -43,11 +42,11 @@ class BootScene extends Phaser.Scene {
         this.load.image('ball_gauntlet', 'assets/balls/ball-gauntlet.png');
         this.load.image('ball_money', 'assets/balls/ball-money.png');
         this.load.image('ball_revive', 'assets/balls/ball-revive.png');
-        
+
         // Volume icons
         this.load.image('volume-unmute', 'assets/volume-unmute.png');
         this.load.image('volume-mute', 'assets/volume-mute.png');
-        
+
         // Tournament trophies
         this.load.image('qualifiers-trophy', 'assets/qualifiers-trophie.png');
         this.load.image('champions-trophy', 'assets/champions-trophie.png');
@@ -63,9 +62,7 @@ class BootScene extends Phaser.Scene {
 
     create() {
         // Once assets are loaded, hide loading screen and go to MenuScene
-        console.log('Assets loaded successfully!');
-        console.log('Textures:', this.textures.list);
-        
+
         // Hide loading screen with fade out effect
         const loadingScreen = document.getElementById('loading-screen');
         if (loadingScreen) {
@@ -75,7 +72,7 @@ class BootScene extends Phaser.Scene {
                 loadingScreen.style.display = 'none';
             }, 500);
         }
-        
+
         /* Restore the account session on load.
          *
          * This was never called, which is why a signed-in player was logged out

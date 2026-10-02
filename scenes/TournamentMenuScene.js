@@ -4,12 +4,11 @@
     }
 
     create() {
-        console.log('TournamentMenuScene created');
-        
+
         const groundHeight = 100;
         const groundY = 720;
         const groundTopY = groundY - groundHeight;
-        
+
         // Background image (sky)
         if (this.textures.exists('background')) {
             const bg = this.add.image(640, 0, 'background');
@@ -19,7 +18,7 @@
         } else {
             this.cameras.main.setBackgroundColor('#87CEEB');
         }
-        
+
         // Ground at bottom
         if (this.textures.exists('ground')) {
             const ground = this.add.image(640, groundY, 'ground');
@@ -112,13 +111,17 @@
             });
         }
 
-        // INFINITE MODE button (bottom center) at (640, 650)
-        // INFINITE MODE button (bottom center) - goes back to the main menu
+        /* Bottom-centre escape hatch back to the main menu.
+         *
+         * Kept as a navigation control, not a second way into endless mode. A
+         * player who came here from the menu and tapped this expecting a run
+         * ended up back where they started, which read as a broken button. The
+         * label now says what it actually does. */
         UI.button(this, {
             x: 640, y: 662, w: 280, h: 64,
-            label: 'INFINITE MODE',
+            label: 'MAIN MENU',
             textSize: 22,
-            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
+            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
             radius: 16,
             onClick: () => this.scene.start('MenuScene')
         });

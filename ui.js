@@ -259,7 +259,29 @@
             container.add(icon);
         }
 
-        var zone = scene.add.zone(0, 0, r * 2, r * 2).setOrigin(0.5);
+        /* Optional caption under the icon.
+         *
+         * An icon with no label is a target nobody thinks to aim at, and it
+         * gives a screen reader nothing to announce. Drawn inside the button's
+         * own container so it moves with the hover scale, and given a dark
+         * stroke so it stays readable against the stadium art. The hit zone is
+         * widened to cover it, so the caption is part of the button rather than
+         * a separate target. */
+        var caption = null;
+        if (o.label) {
+            caption = scene.add.text(0, r + 15, o.label, {
+                fontSize: (o.labelSize || 15) + 'px',
+                color: '#ffffff',
+                fontFamily: FAMILY,
+                fontStyle: '900',
+                stroke: '#0b1220',
+                strokeThickness: 4
+            }).setOrigin(0.5);
+            container.add(caption);
+        }
+
+        var zoneH = caption ? r * 2 + 34 : r * 2;
+        var zone = scene.add.zone(0, caption ? 12 : 0, r * 2, zoneH).setOrigin(0.5);
         zone.setInteractive({ useHandCursor: true });
         container.add(zone);
 
@@ -275,6 +297,8 @@
 
         if (o.depth !== undefined) container.setDepth(o.depth);
         container.gdZone = zone;
+        // Kept for tooling and for anything that needs to read the caption.
+        container.gdLabel = caption;
         return container;
     }
 

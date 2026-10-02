@@ -46,7 +46,30 @@
         'tournamentChampionsWinCount',
         'gdAchievements',
         'gdAchievementsClaimed',
-        'gdPlayerName'
+        'gdPlayerName',
+        /* Tournament state. Without these, signing in on a second device threw
+         * away an in-progress bracket: tournamentRound and tournamentActive
+         * decide which match the player is in, so a player who signed in on
+         * their phone mid-Champions run came back to the tournament menu with no
+         * place in the cup. tournamentChampionsWon matters too - it is the flag
+         * that keeps the Champions Cup unlocked, so leaving it off re-locked a
+         * cup the player had already earned. */
+        'tournamentMode',
+        'tournamentRound',
+        'tournamentActive',
+        'tournamentBracket',
+        'tournamentTeamName',
+        'tournamentChampionsWon',
+        'tournamentProgress',
+        'tournamentQualifiersWon',
+        'tournamentQualifiersDate',
+        'tournamentChampionsDate',
+        /* The tutorial award is once-only, so it has to travel or a player who
+         * finished it on one device gets the achievement again on another. */
+        'gdTutorialDone'
+        /* gdAccountNameChangedAt is deliberately NOT synced: the rename
+         * cooldown is per-device, so changing device does not reset it. Syncing
+         * it would let a player dodge the wait by switching phones. */
     ];
 
     function readSave() {
@@ -154,6 +177,36 @@
             if (remote > numOf(k)) localStorage.setItem(k, String(remote));
         });
 
+        /* Tournament state is not a "maximum", it is a snapshot of where the
+         * player was. Taking the newer side wholesale is the right call, with
+         * one exception: a device mid-tournament is more current than a cloud
+         * copy that says the tournament already finished, so an active local
+         * run always wins.
+         *
+         * Merged before the numeric pass so a stale cloud "tournamentActive:
+         * false" cannot cancel a run in progress here. */
+        var TOURNAMENT_SNAPSHOT = [
+            'tournamentMode', 'tournamentRound', 'tournamentBracket',
+            'tournamentTeamName', 'tournamentChampionsWon', 'tournamentProgress',
+            'tournamentQualifiersWon', 'tournamentQualifiersDate',
+            'tournamentChampionsDate'
+        ];
+        var localActive = localStorage.getItem('tournamentActive') === 'true';
+        TOURNAMENT_SNAPSHOT.forEach(function (k) {
+            if (cloud[k] === undefined || cloud[k] === null) return;
+            if (localActive && k !== 'tournamentActive') return;  // keep local run
+            localStorage.setItem(k, String(cloud[k]));
+        });
+        if (cloud['tournamentActive'] !== undefined && cloud['tournamentActive'] !== null) {
+            // Only the cloud may end a run, never start one the player is in.
+            if (!localActive) localStorage.setItem('tournamentActive', String(cloud['tournamentActive']));
+        }
+
+        /* gdTutorialDone is a flag, not a total: once true it stays true. */
+        if (cloud['gdTutorialDone'] === 'true') {
+            localStorage.setItem('gdTutorialDone', 'true');
+        }
+
         UNIONS.forEach(function (k) {
             if (cloud[k] === undefined) return;
             var merged;
@@ -227,18 +280,63 @@
                 return 'Too many attempts. Wait a minute and try again.';
             case 'auth/network-request-failed':
                 return 'No connection. Check your network.';
+
+            /* Firestore's own codes are NOT auth codes, and the account flow
+             * does plenty of Firestore work: reading the stored account,
+             * writing the save, pushing a score. Every one of those used to
+             * fall through to the default branch below and show the player
+             * the raw machine string - "unavailable", "deadline-exceeded",
+             * "internal" - which means nothing to them.
+             *
+             * Most of these are transient: the same tap a moment later works.
+             * The wording says so rather than blaming the player. */
+            case 'unavailable':
+            case 'deadline-exceeded':
+            case 'aborted':
+            case 'cancelled':
+                return 'No connection right now. Nothing was changed - try again in a moment.';
+            case 'resource-exhausted':
+            case 'internal':
+            case 'unknown':
+                return 'The account service had a problem. Nothing was changed - try again in a moment.';
+            case 'unauthenticated':
+                return 'Your session expired. Sign in again.';
+
             case 'permission-denied':
             case 'missing-or-insufficient-permissions':
                 return 'Signed in, but cloud save is not available yet.';
+
             default:
-                return (e && e.message) ? String(e.message) : 'Something went wrong.';
+                /* Anything still unrecognised is not worth showing verbatim -
+                 * Firebase internals can contain request paths and field names
+                 * that mean nothing to a player. A generic message is more
+                 * honest than a leaked one. */
+                return 'Something went wrong. Nothing was changed.';
         }
     }
 
-    function onChange(fn) { listeners.push(fn); }
+    /* Subscribe to account changes. Returns an unsubscribe function.
+     *
+     * It used to return nothing, so a listener could only be added and never
+     * removed. A view that registers on open has no way to clean up, and every
+     * visit to that view leaks another listener - after a dozen visits a single
+     * sign-in runs a dozen stale callbacks against long-dead scenes. Returning
+     * the unsubscribe lets callers tie the listener to their lifetime. Existing
+     * callers that ignore the return value behave exactly as before. */
+    function onChange(fn) {
+        listeners.push(fn);
+        return function off() {
+            var i = listeners.indexOf(fn);
+            if (i > -1) listeners.splice(i, 1);
+        };
+    }
 
+    /* Iterate a COPY. A listener may unsubscribe itself from inside the
+     * callback - which is exactly what a view does when it tears down while a
+     * change is being delivered - and splicing the live array mid-loop would
+     * skip the next listener. */
     function emit() {
-        listeners.forEach(function (fn) {
+        listeners.slice().forEach(function (fn) {
             try { fn(); } catch (e) { /* a listener must not break auth */ }
         });
     }
@@ -285,9 +383,21 @@
 
     function pushToCloud() {
         if (!currentUser) return Promise.resolve({ ok: true, skipped: 'signed-out' });
+
+        /* Never write without a real account loaded.
+         *
+         * currentAccount is null whenever the sign-in could not read the stored
+         * document. Writing then would push a guessed username and this
+         * browser's save over the player's real progress - the bug that made a
+         * failed read destroy an account. Refusing is always safe: the next
+         * successful sync picks up where this left off. */
+        if (!currentAccount) {
+            return Promise.resolve({ ok: false, skipped: 'no-account-loaded' });
+        }
+
         return P.firestore().collection(ACCOUNT_COLLECTION).doc(currentUser.uid)
             .set({
-                username: currentAccount ? currentAccount.username : (P.getName() || 'player'),
+                username: currentAccount.username,
                 email: currentUser.email || '',
                 save: readSave(),
                 updatedAt: ts()
@@ -310,7 +420,21 @@
     function flush() {
         if (!currentUser) return Promise.resolve();
         if (syncTimer) { clearTimeout(syncTimer); syncTimer = 0; }
-        return pushToCloud();
+        return pushToCloud().then(function (r) {
+            /* Announce a completed sync.
+             *
+             * Without this the only changes that reached a listener were
+             * sign-in, sign-out and rename. A plain save - play a run, bank the
+             * money, walk the 1.5s debounce down - pushed the new numbers to
+             * the cloud and told nobody, so any view showing progress stayed
+             * frozen on whatever it read when it opened. That was the common
+             * case, not the rare one.
+             *
+             * Only on success: an unchanged or failed sync has nothing new to
+             * show, and re-rendering on failure would be noise. */
+            if (r && r.ok) emit();
+            return r;
+        });
     }
 
     /* ---------------- auth actions ---------------- */
@@ -397,12 +521,33 @@
         return /permission|insufficient/i.test(String((e && e.message) || e));
     }
 
-function afterAuth(user, typedUsername) {
+    function afterAuth(user, typedUsername, signedInAs) {
         currentUser = user;
         if (!user) {
             currentAccount = null;
             return Promise.resolve({ ok: true, signedOut: true });
         }
+
+        /* An ANONYMOUS session is not an account.
+         *
+         * restore() hands whatever user auth is holding to this function, and
+         * on a first visit that user is anonymous. Without this guard the
+         * "brand new account" branch below created a real document in the
+         * accounts collection for every anonymous visitor - one junk document
+         * per visitor, each carrying a copy of their whole local save, and a
+         * matching row on the public leaderboard. restore() now filters these
+         * out too; this is the second line of defence. */
+        if (user.isAnonymous) {
+            currentAccount = null;
+            return Promise.resolve({ ok: true, anonymous: true });
+        }
+
+        /* Only sign-ups may create an account. A login that finds no document
+         * means something is wrong (a typo'd uid, a half-published write), and
+         * creating one would attach a stranger's browser save to an account
+         * that is not theirs. */
+        var creating = !!typedUsername;
+
         return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid).get()
             .then(function (snap) {
                 if (snap.exists) {
@@ -420,10 +565,32 @@ function afterAuth(user, typedUsername) {
                             return { ok: true, isNew: false, username: currentAccount.username };
                         });
                 }
+
+                if (!creating) {
+                    /* No document, and this was a LOGIN rather than a sign-up.
+                     *
+                     * The old code fell through to the create branch with
+                     * typedUsername undefined, so the name came from the local
+                     * settings and became "player" or "PLAYER". That reported a
+                     * successful sign-in for an account the player never made,
+                     * and the stub it built was then written back over the real
+                     * document by the next sync. Refuse instead.
+                     *
+                     * If the player just signed up moments ago and their write
+                     * has not landed yet, name the account they just used so
+                     * they are not told the wrong thing. */
+                    currentAccount = null;
+                    return {
+                        ok: false,
+                        error: signedInAs
+                            ? 'No saved progress for "' + signedInAs + '" yet. Try again in a moment.'
+                            : 'No saved progress for that account. Try signing up instead.'
+                    };
+                }
+
                 // Brand new account: upload this browser's save as its progress.
-                // The username TYPED is the account's name. Using the local
-                // player name here would save every new account as "PLAYER".
-                var name = typedUsername || P.getName() || 'player';
+                // The username TYPED is the account's name.
+                var name = typedUsername;
                 currentAccount = { uid: user.uid, username: name, createdAt: null };
                 return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid)
                     .set({
@@ -439,21 +606,26 @@ function afterAuth(user, typedUsername) {
                     });
             })
             .catch(function (e) {
-                // Auth succeeded; only the cloud save failed. Say so, but do
-                // NOT tell the player the login failed.
+                /* The read failed, so we know NOTHING about the stored account:
+                 * not its name, not its save.
+                 *
+                 * This path used to invent a placeholder account and report
+                 * success. pushToCloud() then wrote that placeholder over the
+                 * real document - overwriting the username with "player" and
+                 * the save with whatever this browser happened to hold. A
+                 * transient network error destroyed the player's cloud progress
+                 * permanently, and they were told the sign-in worked.
+                 *
+                 * Nothing is written back on failure. currentAccount stays null,
+                 * which also makes pushToCloud() refuse (see the guard there),
+                 * so the real document is left exactly as it was.
+                 */
+                currentAccount = null;
                 if (missingRules(e)) {
-                    currentAccount = currentAccount || {
-                        uid: user.uid,
-                        username: typedUsername || P.getName() || 'player',
-                        createdAt: null,
-                        save: null
-                    };
-                    emit();
                     return {
-                        ok: true,
+                        ok: false,
                         syncOff: true,
-                        isNew: true,
-                        username: currentAccount.username
+                        error: 'Signed in, but progress could not be loaded. Nothing has been changed - try again in a moment.'
                     };
                 }
                 return err(e);
@@ -521,8 +693,14 @@ function afterAuth(user, typedUsername) {
         if (u.length < 3) return Promise.resolve({ ok: false, error: 'Enter your username.' });
         if (!password) return Promise.resolve({ ok: false, error: 'Enter a password.' });
         return withAuth(function (auth) {
+            /* The username is passed as the CREATE-ONLY marker, not as the
+             * account's name. afterAuth only uses it when there is no stored
+             * document, and only a sign-up may create one - so passing it here
+             * cannot invent an account. It exists so that a returning player
+             * who typed their name in a different case still gets the right
+             * answer when the stored document is briefly unreadable. */
             return auth.signInWithEmailAndPassword(fakeEmail(u), password)
-                .then(function (cred) { return afterAuth(cred.user, u); });
+                .then(function (cred) { return afterAuth(cred.user, null, u); });
         });
     }
 
@@ -579,6 +757,17 @@ function afterAuth(user, typedUsername) {
     /** Change the display name, at most once a week. */
     function changeUsername(raw) {
         if (!currentUser) return Promise.resolve({ ok: false, error: 'Not signed in.' });
+
+        /* Refuse before touching anything if the sign-in never loaded a real
+         * account. Renaming a stub would write the new name over a document we
+         * know nothing about. */
+        if (!currentAccount) {
+            return Promise.resolve({
+                ok: false,
+                error: 'Not connected to your account yet. Try again in a moment.'
+            });
+        }
+
         if (!canChangeUsername()) {
             var mins = Math.ceil(msUntilNameChange() / 60000);
             var when = mins > 90 ? Math.ceil(mins / 1440) + ' day(s)' : Math.round(mins) + ' minutes';
@@ -586,6 +775,9 @@ function afterAuth(user, typedUsername) {
         }
         var name = P.sanitize(raw);
         if (!name) return Promise.resolve({ ok: false, error: 'Enter a name.' });
+        if (name === currentAccount.username) {
+            return Promise.resolve({ ok: false, error: 'That is already your name.' });
+        }
 
         /* currentAccount can legitimately be null here: the sign-in succeeded
          * but reading the account document failed (offline, or the rules were
@@ -603,9 +795,9 @@ function afterAuth(user, typedUsername) {
         currentAccount = {
             uid: currentUser.uid,
             username: name,
-            createdAt: previous ? previous.createdAt : null,
-            lastLogin: previous ? previous.lastLogin : null,
-            save: previous ? previous.save : null
+            createdAt: previous.createdAt,
+            lastLogin: previous.lastLogin,
+            save: previous.save
         };
         P.setName(name);
 
@@ -625,8 +817,18 @@ function afterAuth(user, typedUsername) {
             .catch(function (e) {
                 // Roll the local name back so the UI matches the cloud.
                 currentAccount = previous;
-                if (previous) P.setName(previous.username);
-                return err(e);
+                P.setName(previous.username);
+                /* A rename that could not be saved has NOT happened, so it must
+                 * not start the cooldown. The old shared error text also told
+                 * the player their cloud save was unavailable, which is both
+                 * untrue here and confusing - they are signed in fine, it was
+                 * the name change that failed. */
+                return {
+                    ok: false,
+                    error: missingRules(e)
+                        ? 'Could not save your new name. Your name is unchanged - try again in a moment.'
+                        : friendlyError(e)
+                };
             });
     }
 
@@ -657,6 +859,16 @@ function afterAuth(user, typedUsername) {
             return waitForAuthSettled();
         }).then(function (user) {
             if (!user) return { ok: true, signedOut: true };
+            /* Anonymous sessions are the leaderboard's identity, not an
+             * account. Handing one to afterAuth() created a real accounts
+             * document for every visitor who simply loaded the page - junk
+             * documents nobody can list or delete, plus a leaderboard row each.
+             * A player who has not signed up has no account, full stop. */
+            if (user.isAnonymous) {
+                currentUser = null;
+                currentAccount = null;
+                return { ok: true, anonymous: true };
+            }
             return afterAuth(user);
         }).catch(function () {
             return { ok: true, signedOut: true };

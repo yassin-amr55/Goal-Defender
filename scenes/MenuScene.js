@@ -118,11 +118,19 @@
             onClick: () => this.scene.start('TutorialScene')
         });
 
-        /* ---------------- achievements (top left) ---------------- */
+        /* ---------------- achievements (top left) ----------------
+         *
+         * Labelled. The two side icons were the only way into achievements and
+         * the leaderboard, and a bare medal and podium gave a new player no
+         * reason to tap either - the menu otherwise offers every other screen as
+         * a big named button, so these two read as decoration. The caption sits
+         * under each icon and is part of the same hit area, so the whole block
+         * is one target rather than a 34px circle. */
 
         UI.iconButton(this, {
             x: 52, y: 52, radius: 34,
             icon: 'medal-icon', iconScale: 0.34,
+            label: 'AWARDS',
             fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
             depth: 50,
             onClick: () => this.scene.start('AchievementsScene')
@@ -133,6 +141,7 @@
         UI.iconButton(this, {
             x: 52, y: 142, radius: 34,
             icon: 'podium-icon', iconScale: 0.36,
+            label: 'RANKS',
             fillTop: 0xf0a500, fillBottom: 0xc98a08,
             depth: 50,
             onClick: () => this.scene.start('LeaderboardScene')

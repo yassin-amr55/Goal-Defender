@@ -5,16 +5,14 @@
 
     init(data) {
         this.tournamentMode = data.mode || 'qualifiers';
-        console.log('TournamentNameScene initialized with mode:', this.tournamentMode);
     }
 
     create() {
-        console.log('TournamentNameScene created');
-        
+
         const groundHeight = 100;
         const groundY = 720;
         const groundTopY = groundY - groundHeight;
-        
+
         // Background
         if (this.textures.exists('background')) {
             const bg = this.add.image(640, 0, 'background');
@@ -24,7 +22,7 @@
         } else {
             this.cameras.main.setBackgroundColor('#87CEEB');
         }
-        
+
         // Ground
         if (this.textures.exists('ground')) {
             const ground = this.add.image(640, groundY, 'ground');
@@ -44,7 +42,7 @@
         // Tournament mode display at (640, 150)
         const modeColor = this.tournamentMode === 'qualifiers' ? '#c0c0c0' : '#ffd700'; // Silver or gold
         const modeText = this.tournamentMode === 'qualifiers' ? 'QUALIFIERS CUP' : 'CHAMPIONS CUP';
-        
+
         this.add.text(642, 152, modeText, {
             fontSize: '32px',
             fill: '#000000',
@@ -148,7 +146,6 @@
                     moneyEarned: 0
                 }));
 
-                console.log('Starting new tournament:', { teamName, mode: this.tournamentMode, round: initialRound });
 
                 // Count the tournament for the achievement system
                 if (window.Achievements) {

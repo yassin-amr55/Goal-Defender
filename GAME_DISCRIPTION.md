@@ -76,7 +76,7 @@ To increase challenge over time:
 
 **Speed Increase (per successful deflect):**
 - **0-150% boost:** +4% per deflect
-- **150-300% boost:** +2% per deflect  
+- **150-300% boost:** +2% per deflect
 - **300% boost:** Maximum reached, no more increase
 
 **Hitbox Shrinking:**

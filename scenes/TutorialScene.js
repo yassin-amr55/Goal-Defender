@@ -244,7 +244,7 @@ class TutorialScene extends GameScene {
         const money = deflections * 3;
 
         // Bank the reward exactly like a real run
-        const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || '0');
+        const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || '0', 10);
         localStorage.setItem('goalDefenderMoney', currentMoney + money);
 
         this.clearHint();
@@ -343,7 +343,15 @@ class TutorialScene extends GameScene {
             }
         });
 
-        this.time.delayedCall(4000, () => {
+        /* Unlock the button after 1s, not 4s.
+         *
+         * The button is greyed out and ignores clicks for this whole window,
+         * and the results screen appears before it, so a player who finishes
+         * quickly was left staring at a dead HOME button for three extra
+         * seconds with no indication that it would ever wake up. Long enough
+         * to avoid a mis-click straight out of the result animation, short
+         * enough that nobody thinks it is broken. */
+        this.time.delayedCall(1000, () => {
             this.homeLocked = false;
             this.homeBtn.gdSetFill(0xffb340, 0xf08a1d, 0xffc766);
             this.tweens.add({ targets: this.homeBtn, scale: 1.06, duration: 200,

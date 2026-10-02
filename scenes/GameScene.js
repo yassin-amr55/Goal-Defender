@@ -6,8 +6,6 @@
     }
 
     create() {
-        console.log('GameScene create() called');
-        console.log('Available textures:', Object.keys(this.textures.list));
 
         // Ground height (10-15% of screen)
         const groundHeight = 100; // pixels
@@ -20,7 +18,6 @@
             bg.setOrigin(0.5, 0); // Anchor to top center
             bg.setDisplaySize(1280, groundTopY); // Height from top to ground
             bg.setDepth(-2); // Behind everything
-            console.log('Background added, height:', groundTopY);
         } else {
             console.error('Background texture not found!');
             this.cameras.main.setBackgroundColor('#87CEEB'); // Fallback
@@ -32,7 +29,6 @@
             ground.setOrigin(0.5, 1); // Anchor to bottom center
             ground.setDisplaySize(1280, groundHeight); // Stretch to full width, fixed height
             ground.setDepth(-1); // Above background, below everything else
-            console.log('Ground added');
         } else {
             console.error('Ground texture not found!');
         }
@@ -45,13 +41,11 @@
             // Behind everything. At depth 11 the grass drew over the goal and
             // over the goal-explosion particles, hiding the win feedback.
             grass.setDepth(-2);
-            console.log('Grass added');
         }
 
         // Store ground level for physics
         this.groundLevel = groundY - groundHeight;
-        
-        console.log('Ground level:', this.groundLevel);
+
 
         // PHASE 10: Load equipped ball and apply abilities BEFORE creating ball
         this.equippedBall = localStorage.getItem('goalDefenderEquippedBall') || 'default';
@@ -61,15 +55,15 @@
         this.hitboxRadius = 120; // Start with moderate hitbox (120px radius)
         this.hitboxShrinkAmount = 15 * this.hitboxShrinkMultiplier; // Shrink amount affected by ball ability
         this.shrinkCountdown = 20; // Countdown timer
-        
+
         this.hitboxCircle = this.add.circle(640, 360, this.hitboxRadius, 0xffffff, 0.3);
         this.hitboxCircle.setDepth(5); // Make sure it's clickable but behind goal
-        
+
         // PHASE 5: Add middle line - ball can only be clicked left of this line
         this.middleLine = this.add.line(0, 0, 640, 0, 640, 720, 0xff0000, 0.3);
         this.middleLine.setOrigin(0, 0);
         this.middleLine.setDepth(5);
-        
+
         // PHASE 5: Timer to shrink hitbox every 20 seconds
         this.time.addEvent({
             delay: 20000, // 20 seconds
@@ -77,7 +71,7 @@
             callbackScope: this,
             loop: true
         });
-        
+
         // PHASE 5: Countdown timer (updates every second)
         this.time.addEvent({
             delay: 1000, // 1 second
@@ -90,9 +84,8 @@
             callbackScope: this,
             loop: true
         });
-        
-        console.log('Hitbox added with radius:', this.hitboxRadius, 'Will shrink every 20 seconds');
-        
+
+
         // PHASE 4 & 5: Add global click handler to check distance from ball
         //
         // The hit test accepts where the ball has been over the last few
@@ -160,7 +153,6 @@
             this.goal.body.setAllowGravity(false);
             this.goal.setDepth(10); // Goal appears in front of ball
 
-            console.log('Goal added at y:', this.goal.y, 'Goal top:', this.goal.y - this.goal.displayHeight);
         } else {
             console.error('Goal texture not found!');
         }
@@ -168,10 +160,10 @@
         // PHASE 3: Add the ball sprite in the middle (behind goal) - AFTER goal is created
         // Get the correct ball texture based on equipped ball
         const ballTexture = this.getBallTexture();
-        
+
         // Fallback to default if texture doesn't exist
         const finalTexture = this.textures.exists(ballTexture) ? ballTexture : 'ball_default';
-        
+
         if (this.textures.exists(finalTexture)) {
             // Start ball at a visible position in the middle of the screen
             const ballStartY = 400; // Middle-ish of screen (720/2 = 360, but a bit lower)
@@ -182,14 +174,14 @@
             this.ball.setDamping(false); // Disable velocity damping
             this.ball.setDrag(0); // No air resistance
             this.ball.setDepth(1); // Behind goal
-            
+
             // Enable gravity (lower value)
             this.ball.setGravityY(500);
-            
+
             // Set initial movement direction: moving toward goal (left)
             this.ballSpeed = 300 * this.speedMultiplier; // Affected by ball ability
             this.ball.setVelocity(-this.ballSpeed, 0);
-            
+
             // PHASE 12: Add ball trail at higher speed (will be visible when speed increases)
             this.ballTrail = null; // clear any reference from a previous run
             if (!window.Settings || window.Settings.isOn('gdParticles')) {
@@ -203,10 +195,8 @@
                 this.ballTrail.startFollow(this.ball);
                 this.ballTrail.setDepth(0);
             }
-            
-            console.log('Ball created with texture:', finalTexture);
-            console.log('Equipped ball:', this.equippedBall);
-            
+
+
             // Set minimum hitbox size to ball size (affected by ball ability)
             this.minHitboxRadius = (this.ball.displayWidth / 2) * this.minHitboxMultiplier;
 
@@ -216,9 +206,6 @@
                 this.hitboxShrinkAmount = 0;   // nowhere left to shrink to
             }
 
-            console.log('Ball added at position:', this.ball.x, this.ball.y);
-            console.log('Ball display size:', this.ball.displayWidth, this.ball.displayHeight);
-            console.log('Min hitbox radius set to ball radius:', this.minHitboxRadius);
         } else {
             console.error('Ball texture not found! Tried:', finalTexture);
         }
@@ -234,15 +221,13 @@
         if (this.goal && this.ball) {
             this.maxBallHeight =
                 this.goal.y - this.goal.displayHeight + (this.ball.displayWidth / 2);
-            console.log('Goal top:', this.goal.y - this.goal.displayHeight,
-                'Max ball height (roof):', this.maxBallHeight);
         }
 
         // Create invisible ground collider for ball to bounce on
         this.groundCollider = this.add.rectangle(640, this.groundLevel, 1280, 10, 0x00ff00, 0);
         this.physics.add.existing(this.groundCollider, true); // true = static body
         this.physics.add.collider(this.ball, this.groundCollider, this.onGroundHit, null, this);
-        
+
         // Place the wall sprite on the right (directly on top of ground)
         if (this.textures.exists('wall')) {
             this.wall = this.physics.add.sprite(1200, groundY - groundHeight, 'wall');
@@ -266,9 +251,6 @@
 
             this.wall.setImmovable(true);
             this.wall.body.setAllowGravity(false);
-            console.log('Wall art', wallSrc.width + 'x' + wallSrc.height,
-                '| solid band', Math.round(solidRight - solidLeft) + 'px',
-                '| body at', Math.round(this.wall.body.left) + '..' + Math.round(this.wall.body.right));
 
             // PHASE 3: Add collision with wall → bounce
             this.physics.add.collider(this.ball, this.wall, this.onWallHit, null, this);
@@ -285,7 +267,7 @@
         // Lifetime total of deflections, used for future achievements.
         // This run's deflections are the same count as this.score.
         this.runDeflections = 0;
-        this.lifetimeDeflections = parseInt(localStorage.getItem('goalDefenderDeflections') || '0');
+        this.lifetimeDeflections = parseInt(localStorage.getItem('goalDefenderDeflections') || '0', 10);
 
         // HUD: three independent readouts, no backing panel. Each keeps a dark
         // stroke so it stays readable over the stadium art.
@@ -318,7 +300,7 @@
 
         // Initialize game over flag
         this.gameOver = false;
-        
+
         // Initialize pause flag
         this.isPaused = false;
 
@@ -334,7 +316,7 @@
             this.createReviveCounter();
             this.showReviveCounter();
         }
-        
+
         // Add ESC key listener for pause
         this.input.keyboard.on('keydown-ESC', () => {
             if (!this.gameOver) {
@@ -342,7 +324,6 @@
             }
         });
 
-        console.log('GameScene loaded - Phase 3 complete');
     }
 
     loadBallAbilities() {
@@ -423,7 +404,6 @@
                 break;
         }
 
-        console.log('Ball abilities loaded:', this.equippedBall, 'maxSpeedBoost:', this.maxSpeedBoost + '%');
     }
 
     /** "REVIVE: n" readout at top centre. Rebuilt on demand because a restart
@@ -499,16 +479,16 @@
         // Generate a "pop" sound for ball click
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
-        
+
         oscillator.connect(gainNode);
         gainNode.connect(this.audioContext.destination);
-        
+
         oscillator.frequency.value = 800; // High pitch
         oscillator.type = 'sine';
-        
+
         gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
-        
+
         oscillator.start(this.audioContext.currentTime);
         oscillator.stop(this.audioContext.currentTime + 0.1);
     }
@@ -519,23 +499,23 @@
         const bufferSize = this.audioContext.sampleRate * 0.5; // 0.5 seconds
         const buffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
         const data = buffer.getChannelData(0);
-        
+
         // Generate white noise
         for (let i = 0; i < bufferSize; i++) {
             data[i] = Math.random() * 2 - 1;
         }
-        
+
         const noise = this.audioContext.createBufferSource();
         noise.buffer = buffer;
-        
+
         const gainNode = this.audioContext.createGain();
         noise.connect(gainNode);
         gainNode.connect(this.audioContext.destination);
-        
+
         // Fade out the explosion
         gainNode.gain.setValueAtTime(0.5, this.audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.5);
-        
+
         noise.start(this.audioContext.currentTime);
         noise.stop(this.audioContext.currentTime + 0.5);
     }
@@ -545,34 +525,32 @@
         // PHASE 13: Generate a bounce sound
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
-        
+
         oscillator.connect(gainNode);
         gainNode.connect(this.audioContext.destination);
-        
+
         oscillator.frequency.value = 300; // Lower pitch than click
         oscillator.type = 'sine';
-        
+
         gainNode.gain.setValueAtTime(0.2, this.audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
-        
+
         oscillator.start(this.audioContext.currentTime);
         oscillator.stop(this.audioContext.currentTime + 0.15);
     }
 
     triggerGameOver() {
         // PHASE 7: Explosion effect and fade to game over
-        console.log('Ball fully entered goal - Game Over!');
-        
+
         // PHASE 8: Save high score
         const currentHighScore = localStorage.getItem('goalDefenderHighScore') || 0;
         if (this.score > currentHighScore) {
             localStorage.setItem('goalDefenderHighScore', this.score);
-            console.log('New high score:', this.score);
         }
-        
+
         // Play explosion sound
         this.playExplosionSound();
-        
+
         // Create particle explosion at ball position
         if (!window.Settings || window.Settings.isOn('gdParticles')) {
             this.add.particles(this.ball.x, this.ball.y, 'ball_default', {
@@ -584,14 +562,14 @@
                 blendMode: 'ADD'
             });
         }
-        
+
         // Stop ball movement
         this.ball.setVelocity(0, 0);
         this.ball.setVisible(false);
-        
+
         // Fade screen to black
         this.cameras.main.fadeOut(1000, 0, 0, 0);
-        
+
         // Move to GameOverScene after fade
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.scene.start('GameOverScene', {
@@ -603,10 +581,8 @@
 
     onBallClick() {
         // PHASE 4: Click-to-deflect mechanic with upward curve
-        console.log('onBallClick called');
         if (this.ball) {
-            console.log('Current velocity:', this.ball.body.velocity.x);
-            
+
             // PHASE 6: Increase ball speed with dynamic rate
             // Past 100% the step gets smaller. Both the step size and the
             // ceiling are per-ball (Neon steps faster, Spark tops out lower).
@@ -619,30 +595,30 @@
             } else if (this.speedBoost >= 100) {
                 increaseRate = this.boostStepLate;
             }
-            
+
             if (this.speedBoost < maxBoost) {
                 this.ballSpeed = this.ballSpeed * increaseRate;
                 const boostAmount = (increaseRate - 1) * 100;
                 this.speedBoost += boostAmount; // Track cumulative boost
-                
+
                 // Round to avoid floating point precision issues
                 this.speedBoost = Math.round(this.speedBoost * 100) / 100;
-                
+
                 // Cap at this ball's ceiling
                 if (this.speedBoost > maxBoost) {
                     this.speedBoost = maxBoost;
                 }
             }
-            
+
             // PHASE 6 Optional: Slight variation of angle on each bounce
             const angleVariation = Phaser.Math.Between(-20, 20); // Random angle variation
             const upwardSpeed = -350 + angleVariation;
-            
+
             // Reverse direction toward the wall (right) with increased speed
             const horizontalSpeed = this.ballSpeed;
-            
+
             this.ball.setVelocity(horizontalSpeed, upwardSpeed);
-            
+
             // Add score (affected by ball ability)
             const scoreGain = Math.round(this.scoreMultiplier);
             this.score += scoreGain;
@@ -666,7 +642,7 @@
             if (window.Settings && window.Settings.isOn('gdShake')) {
                 this.cameras.main.shake(100, 0.005);
             }
-            
+
             // PHASE 12: Flash effect when score increments
             this.scoreText.setScale(1.3);
             this.tweens.add({
@@ -675,11 +651,10 @@
                 duration: 200,
                 ease: 'Back.easeOut'
             });
-            
+
             // Play click sound
             this.playClickSound();
-            
-            console.log('Ball deflected! New speed:', this.ballSpeed, 'Speed boost:', this.speedBoost + '%', 'Score:', this.score);
+
         } else {
             console.error('Ball not found!');
         }
@@ -689,12 +664,12 @@
         // PHASE 5: Shrink hitbox every 10 seconds
         if (this.hitboxRadius > this.minHitboxRadius) {
             this.hitboxRadius -= this.hitboxShrinkAmount;
-            
+
             // Don't go below minimum (ball size)
             if (this.hitboxRadius < this.minHitboxRadius) {
                 this.hitboxRadius = this.minHitboxRadius;
             }
-            
+
             // PHASE 12: Shrinking hitbox pulse animation
             this.tweens.add({
                 targets: this.hitboxCircle,
@@ -703,10 +678,8 @@
                 yoyo: true,
                 repeat: 1
             });
-            
-            console.log('Hitbox shrunk to:', this.hitboxRadius, 'Min:', this.minHitboxRadius);
+
         } else {
-            console.log('Hitbox at minimum size (ball size)');
         }
     }
 
@@ -714,12 +687,12 @@
         // Ball bounces off the wall (reverse horizontal direction)
         if (this.ball) {
             const currentVerticalVelocity = this.ball.body.velocity.y;
-            
+
             // Add random vertical velocity to make ball less predictable
             // 50% chance to add upward velocity, 50% chance to keep current or add slight downward
             const randomBoost = Math.random();
             let newVerticalVelocity = currentVerticalVelocity;
-            
+
             if (randomBoost > 0.5) {
                 // Add upward velocity
                 newVerticalVelocity = -200 - Math.random() * 100; // Random upward between -200 and -300
@@ -727,13 +700,12 @@
                 // If moving slowly, add some random velocity (up or down)
                 newVerticalVelocity = (Math.random() - 0.5) * 300; // Random between -150 and 150
             }
-            
+
             this.ball.setVelocity(-this.ballSpeed, newVerticalVelocity);
-            
+
             // PHASE 13: Bounce sound
             this.playBounceSound();
-            
-            console.log('Ball bounced off wall with vertical velocity:', newVerticalVelocity);
+
         }
     }
 
@@ -741,19 +713,18 @@
         // When ball hits ground, make it jump
         if (this.ball && this.ball.body.touching.down) {
             // Only bounce if ball is touching ground from above
-            
+
             // Fixed jump velocity to reach approximately goal height.
             // Rubber Ball bounces 25% higher.
             const jumpVelocity = -400 * (this.jumpMultiplier || 1);
-            
+
             // Keep horizontal velocity constant
             const horizontalVelocity = this.ball.body.velocity.x > 0 ? this.ballSpeed : -this.ballSpeed;
             this.ball.setVelocity(horizontalVelocity, jumpVelocity);
-            
+
             // PHASE 13: Bounce sound
             this.playBounceSound();
-            
-            console.log('Ball bounced off ground! Jump velocity:', jumpVelocity, 'Horizontal:', horizontalVelocity);
+
         }
     }
 
@@ -862,10 +833,10 @@
         if (this.ball && this.hitboxCircle) {
             this.hitboxCircle.x = this.ball.x;
             this.hitboxCircle.y = this.ball.y;
-            
+
             // PHASE 5: Smooth animation - update hitbox circle radius
             this.hitboxCircle.setRadius(this.hitboxRadius);
-            
+
             // Only show hitbox when ball is moving left (toward goal) and left of middle
             const ballLeftOfMiddle = this.ball.x < 640;
             const alwaysOn = window.Settings && window.Settings.isOn('gdHitboxAlways');
@@ -887,7 +858,7 @@
             // Goal opening is at the right side of the goal sprite
             const goalOpeningX = this.goal.x + (this.goal.displayWidth / 2);
             const ballRightEdge = this.ball.x + (this.ball.displayWidth / 2);
-            
+
             // Lose when the entire ball passes through the goal opening
             if (ballRightEdge < goalOpeningX) {
                     // Revive Ball: spend the charge instead of losing. The ball is

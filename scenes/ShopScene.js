@@ -8,11 +8,11 @@
 
     create() {
         // PHASE 9: Shop System
-        
+
         const groundHeight = 100;
         const groundY = 720;
         const groundTopY = groundY - groundHeight;
-        
+
         // Background image (sky) - positioned so bottom aligns with top of ground
         if (this.textures.exists('background')) {
             const bg = this.add.image(640, 0, 'background');
@@ -40,7 +40,7 @@
         }).setOrigin(0.5);
 
         // Get player money
-        this.playerMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0);
+        this.playerMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0, 10);
 
         // Money chip
         UI.panel(this, {
@@ -116,7 +116,6 @@
         // Create ball grid
         this.createBallGrid();
 
-        console.log('ShopScene loaded - Phase 9');
     }
 
     createBallGrid() {
@@ -253,24 +252,21 @@
             // Equip the ball
             this.equippedBall = ball.id;
             localStorage.setItem('goalDefenderEquippedBall', ball.id);
-            console.log('Equipped:', ball.name);
             this.scene.restart(); // Refresh shop
         } else {
             // Try to buy the ball
             if (this.playerMoney >= ball.price) {
                 this.playerMoney -= ball.price;
                 localStorage.setItem('goalDefenderMoney', this.playerMoney);
-                
+
                 this.ownedBalls.push(ball.id);
                 localStorage.setItem('goalDefenderOwnedBalls', JSON.stringify(this.ownedBalls));
 
                 // Owning a new ball can complete a collection achievement
                 if (window.Achievements) window.Achievements.check(this);
 
-                console.log('Purchased:', ball.name);
                 this.scene.restart(); // Refresh shop
             } else {
-                console.log('Not enough money!');
                 // TODO: Show "Not enough money" message
             }
         }

@@ -11,7 +11,7 @@
         // Remember whether the Champions Cup was ever won, so a later defeat
         // does not revoke it.
         this.everWonChampions = localStorage.getItem('tournamentChampionsWon') === 'true';
-        
+
         // Save tournament state
         localStorage.setItem('tournamentActive', 'true');
         localStorage.setItem('tournamentMode', this.mode);
@@ -19,7 +19,6 @@
     }
 
     create() {
-        console.log('TournamentGameScene create() called');
 
         const groundHeight = 100;
         const groundY = 720;
@@ -153,15 +152,14 @@
         // Anti-autoclicker: at most one deflect per inbound pass. Set when a
         // tap lands, cleared in update() once the ball is travelling right.
         this.deflectLock = false;
-        
+
         // Create invisible barrier
         const barrierY = (groundY - groundHeight) / 2; // Middle of playable area
         const barrierHeight = groundY - groundHeight; // Height from ground to top
         this.barrier = this.add.rectangle(this.barrierX, barrierY, 10, barrierHeight, 0xff0000, 0); // Alpha 0 = invisible
         this.physics.add.existing(this.barrier, true); // true = static body (immovable by default)
         this.barrierCollider = this.physics.add.collider(this.ball, this.barrier, this.onBarrierHit, null, this);
-        
-        console.log('Right goal at:', this.rightGoal.x, 'Goal left edge:', goalLeftEdge, 'Barrier at:', this.barrierX);
+
 
         this.physics.world.setBounds(0, 0, 1280, 720);
 
@@ -178,7 +176,7 @@
         this.tournamentDeflectionsBanked = 0;
         this.requiredScore = this.getRequiredScore(this.mode, this.currentRound);
         this.gameOver = false;
-        
+
         // Initialize pause flag
         this.isPaused = false;
 
@@ -190,7 +188,7 @@
         else if (roundName === 'quarterFinals') roundName = 'QUARTER FINALS';
         else if (roundName === 'semiFinals') roundName = 'SEMI FINALS';
         else if (roundName === 'finals') roundName = 'FINALS';
-        
+
         // HUD: independent readouts, no backing panels
         this.add.text(640, 30, roundName, {
             fontSize: '24px',
@@ -263,7 +261,7 @@
                 }
             }
         });
-        
+
         // Add ESC key listener for pause
         this.input.keyboard.on('keydown-ESC', () => {
             if (!this.gameOver) {
@@ -402,17 +400,17 @@
 
     onBallClick() {
         this.playClickSound();
-        
+
         // PHASE 6: Increase ball speed with dynamic rate (same as infinite mode)
         const maxBoost = this.maxSpeedBoost || 300;
         let increaseRate = 1.04; // 4% by default
-        
+
         if (this.speedBoost >= maxBoost) {
             increaseRate = 1.0; // Max boost reached
         } else if (this.speedBoost >= 100) {
             increaseRate = 1.02; // After 100%, increase by 2%
         }
-        
+
         if (this.speedBoost < maxBoost) {
             this.ballSpeed = this.ballSpeed * increaseRate;
             const boostAmount = (increaseRate - 1) * 100;
@@ -420,14 +418,14 @@
             this.speedBoost = Math.round(this.speedBoost * 100) / 100;
             if (this.speedBoost > maxBoost) this.speedBoost = maxBoost;
         }
-        
+
         // Angle variation (same as infinite mode)
         const angleVariation = Phaser.Math.Between(-20, 20);
         const upwardSpeed = -350 + angleVariation;
-        
+
         // Reverse direction toward the right with increased speed
         this.ball.setVelocity(this.ballSpeed, upwardSpeed);
-        
+
         // Add score (1 per deflect - tournament balls have no ability bonus)
         const scoreGain = Math.round(this.scoreMultiplier);
         this.score += scoreGain;
@@ -448,7 +446,7 @@
         const bankNow = this.runDeflections;
         if (bankNow > banked) {
             const lifetime = parseInt(
-                localStorage.getItem('goalDefenderDeflections') || '0');
+                localStorage.getItem('goalDefenderDeflections') || '0', 10);
             localStorage.setItem(
                 'goalDefenderDeflections', (lifetime + (bankNow - banked)).toString());
             this.tournamentDeflectionsBanked = bankNow;
@@ -456,12 +454,12 @@
 
         this.scoreText.setText(`Score: ${this.score} / ${this.requiredScore}`);
         this.speedBoostText.setText(`Speed Boost: ${this.speedBoost}%`);
-        
+
         // Screen shake (same as infinite mode)
         if (window.Settings && window.Settings.isOn('gdShake')) {
             this.cameras.main.shake(100, 0.005);
         }
-        
+
         // Score flash (same as infinite mode)
         this.scoreText.setScale(1.3);
         this.tweens.add({
@@ -476,7 +474,6 @@
             this.allowGoal = true;
             // Remove barrier collision
             this.physics.world.removeCollider(this.barrierCollider);
-            console.log('Barrier removed! Goal allowed.');
         }
     }
 
@@ -489,15 +486,14 @@
             this.playBounceSound();
         }
     }
-    
+
     onBarrierHit() {
-        console.log('Barrier hit! Ball velocity:', this.ball.body.velocity.x, this.ball.body.velocity.y);
-        
+
         // Ball bounces off barrier (like wall in infinite mode)
         if (this.ball && !this.allowGoal) {
             const currentVerticalVelocity = this.ball.body.velocity.y;
             let newVerticalVelocity = currentVerticalVelocity;
-            
+
             // Add random vertical velocity to make ball less predictable (same as infinite mode wall bounce)
             const randomBoost = Math.random();
             if (randomBoost > 0.5) {
@@ -507,7 +503,7 @@
                 // If moving slowly, add some random velocity (up or down)
                 newVerticalVelocity = (Math.random() - 0.5) * 300; // Random between -150 and 150
             }
-            
+
             // Reverse horizontal direction with current ball speed
             this.ball.setVelocity(-this.ballSpeed, newVerticalVelocity);
             this.playBounceSound();
@@ -517,7 +513,6 @@
             // tournament's deflect total - which is the figure shown on the
             // result screen. Player deflections are counted in onBallClick().
 
-            console.log('Ball bounced back with velocity:', this.ball.body.velocity.x, this.ball.body.velocity.y);
         }
     }
 
@@ -601,7 +596,7 @@
         this.hitboxCircle.x = this.ball.x;
         this.hitboxCircle.y = this.ball.y;
         this.hitboxCircle.setRadius(this.hitboxRadius);
-        
+
         // Only show hitbox when ball is moving left and left of middle
         const ballLeftOfMiddle = this.ball.x < 640;
         const alwaysOn = window.Settings && window.Settings.isOn('gdHitboxAlways');
@@ -645,15 +640,15 @@
         // Victory: Left side of ball passes left side of right goal (ball enters from left)
         const rightGoalLeftEdge = this.rightGoal.x - (this.rightGoal.displayWidth / 2);
         const ballLeftEdge = this.ball.x - (this.ball.displayWidth / 2);
-        
+
         // Defeat: Right side of ball passes right side of left goal (ball fully enters left goal)
         const leftGoalRightEdge = this.leftGoal.x + (this.leftGoal.displayWidth / 2);
         const ballRightEdge = this.ball.x + (this.ball.displayWidth / 2);
-        
+
         // Victory condition: ball allowed to enter goal AND ball's left edge crosses goal's left edge
         if (this.allowGoal && ballLeftEdge >= rightGoalLeftEdge) {
             this.triggerVictory();
-        } 
+        }
         // Defeat condition: ball's right edge crosses left goal's right edge (ball fully in left goal)
         else if (ballRightEdge <= leftGoalRightEdge) {
             this.triggerDefeat();
@@ -682,7 +677,7 @@
         // Stop ball movement
         this.ball.setVelocity(0, 0);
         this.ball.setVisible(false);
-        
+
         // Fade screen to black (same as infinite mode)
         this.cameras.main.fadeOut(1000, 0, 0, 0);
 
@@ -690,7 +685,7 @@
         // half what Champions does, so the harder bracket is worth the extra
         // effort. Endless mode and the tutorial keep their own separate rates.
         const money = this.score * this.getScoreRate();
-        const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || '0');
+        const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || '0', 10);
         localStorage.setItem('goalDefenderMoney', (currentMoney + money).toString());
 
         // Lifetime deflections are banked per deflect in onBallClick(), so
@@ -707,27 +702,24 @@
         // Update tournament progress and bracket
         const currentRound = localStorage.getItem('tournamentRound');
         const nextRound = this.getNextRound(currentRound);
-        
+
         // Update bracket with player's victory
         this.updateBracketWithVictory(currentRound);
-        
+
         if (nextRound) {
             // Advance to next round
             localStorage.setItem('tournamentRound', nextRound);
-            console.log('Advanced to:', nextRound);
         } else {
             // Won the tournament!
             const mode = localStorage.getItem('tournamentMode');
             if (mode === 'qualifiers') {
                 localStorage.setItem('tournamentQualifiersWon', 'true');
                 localStorage.setItem('tournamentQualifiersDate', new Date().toLocaleDateString());
-                console.log('Qualifiers Cup won! Champions Cup unlocked.');
             } else if (mode === 'champions') {
                 localStorage.setItem('tournamentChampionsWon', 'true');
                 localStorage.setItem('tournamentChampionsDate', new Date().toLocaleDateString());
-                console.log('Champions Cup won!');
             }
-            
+
             // Clear active tournament
             localStorage.setItem('tournamentActive', 'false');
             localStorage.removeItem('tournamentRound');
@@ -736,11 +728,11 @@
         // Wait for fade to complete, then transition
         this.cameras.main.once('camerafadeoutcomplete', () => {
             const currentRound = localStorage.getItem('tournamentRound');
-            
+
             if (!currentRound) {
                 // Won the tournament!
-                this.scene.start('TournamentVictoryScene', { 
-                    mode: this.mode, 
+                this.scene.start('TournamentVictoryScene', {
+                    mode: this.mode,
                     stats: progress,
                     result: 'victory'
                 });
@@ -776,19 +768,18 @@
         // Stop ball movement
         this.ball.setVelocity(0, 0);
         this.ball.setVisible(false);
-        
+
         // Fade screen to black (same as infinite mode)
         this.cameras.main.fadeOut(1000, 0, 0, 0);
 
         // Clear active tournament
         localStorage.setItem('tournamentActive', 'false');
-        
+
         // Losing a Champions run re-locks the cup, but only if the player has
         // not already earned it. Otherwise a single loss would take away a
         // trophy they legitimately won.
         if (this.mode === 'champions' && !this.everWonChampions) {
             localStorage.setItem('tournamentChampionsWon', 'false');
-            console.log('Champions Cup locked again due to defeat');
         }
 
         // Wait for fade to complete, then transition
@@ -816,37 +807,34 @@
         // Load current bracket
         const bracket = JSON.parse(localStorage.getItem('tournamentBracket') || '{}');
         const playerTeam = localStorage.getItem('tournamentTeamName') || 'Your Team';
-        
+
         // Find player's match in current round and mark as won
         if (bracket[currentRound]) {
             const matches = Array.isArray(bracket[currentRound]) ? bracket[currentRound] : [bracket[currentRound]];
-            
+
             for (let match of matches) {
                 if (match.team1 === playerTeam || match.team2 === playerTeam) {
                     match.winner = playerTeam;
-                    console.log(`Player won match: ${match.team1} vs ${match.team2}, winner: ${playerTeam}`);
                     break;
                 }
             }
         }
-        
+
         // Advance player to next round and simulate other matches
         const nextRound = this.getNextRound(currentRound);
         if (nextRound && bracket[nextRound]) {
             // Simulate other matches in current round (advance random teams)
             this.simulateOtherMatches(bracket, currentRound, playerTeam);
-            
+
             // Find empty slot in next round and place player
             const nextMatches = Array.isArray(bracket[nextRound]) ? bracket[nextRound] : [bracket[nextRound]];
-            
+
             for (let match of nextMatches) {
                 if (match.team1 === 'TBD') {
                     match.team1 = playerTeam;
-                    console.log(`Player advanced to ${nextRound} as team1`);
                     break;
                 } else if (match.team2 === 'TBD') {
                     match.team2 = playerTeam;
-                    console.log(`Player advanced to ${nextRound} as team2`);
                     break;
                 }
             }
@@ -854,9 +842,8 @@
             // Winning the final: record the champion. Without this the bracket
             // kept showing an empty trophy slot after the tournament was won.
             bracket.finals.winner = playerTeam;
-            console.log('Player won the tournament:', playerTeam);
         }
-        
+
         // Save updated bracket
         localStorage.setItem('tournamentBracket', JSON.stringify(bracket));
     }
@@ -866,31 +853,28 @@
         if (bracket[currentRound]) {
             const matches = Array.isArray(bracket[currentRound]) ? bracket[currentRound] : [bracket[currentRound]];
             const nextRound = this.getNextRound(currentRound);
-            
+
             for (let match of matches) {
                 // Skip player's match (already handled)
                 if (match.team1 === playerTeam || match.team2 === playerTeam) continue;
-                
+
                 // Skip if already has winner
                 if (match.winner) continue;
-                
+
                 // Randomly select winner from the two teams
                 if (match.team1 !== 'TBD' && match.team2 !== 'TBD') {
                     match.winner = Math.random() < 0.5 ? match.team1 : match.team2;
-                    console.log(`Simulated match: ${match.team1} vs ${match.team2}, winner: ${match.winner}`);
-                    
+
                     // Advance winner to next round
                     if (nextRound && bracket[nextRound]) {
                         const nextMatches = Array.isArray(bracket[nextRound]) ? bracket[nextRound] : [bracket[nextRound]];
-                        
+
                         for (let nextMatch of nextMatches) {
                             if (nextMatch.team1 === 'TBD') {
                                 nextMatch.team1 = match.winner;
-                                console.log(`${match.winner} advanced to ${nextRound} as team1`);
                                 break;
                             } else if (nextMatch.team2 === 'TBD') {
                                 nextMatch.team2 = match.winner;
-                                console.log(`${match.winner} advanced to ${nextRound} as team2`);
                                 break;
                             }
                         }
@@ -903,10 +887,10 @@
     getNextRound(round) {
         const qualifiersOrder = ['roundOf16', 'quarterFinals', 'semiFinals', 'finals'];
         const championsOrder = ['roundOf32', 'roundOf16', 'quarterFinals', 'semiFinals', 'finals'];
-        
+
         const order = this.mode === 'champions' ? championsOrder : qualifiersOrder;
         const idx = order.indexOf(round);
-        
+
         if (idx === -1 || idx === order.length - 1) return null;
         return order[idx + 1];
     }
