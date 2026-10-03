@@ -79,7 +79,25 @@ var cloudWatchTimer = 0;
         'tournamentChampionsDate',
         /* The tutorial award is once-only, so it has to travel or a player who
          * finished it on one device gets the achievement again on another. */
-        'gdTutorialDone'
+        'gdTutorialDone',
+        /* Best SINGLE run figures. These are records, not totals: the "deflect
+         * 100 in one run" ladder reads the first, and "10 perfect hits in one
+         * run" the second. Synced because a record is exactly the thing a
+         * player expects to keep when they move device. Without these a phone
+         * would silently forget the player's best run. */
+        'goalDefenderBestRunDeflections',
+        'goalDefenderBestRunPerfects',
+        'goalDefenderPerfectHits',
+        /* Consecutive cup wins. Travels with the account so a streak survives a
+         * device change - otherwise "3 back to back" would be unachievable for
+         * anyone who did not finish three cups on one device. */
+        'goalDefenderTournamentStreak',
+        /* "Completed a run on a phone". Personal, not progress - it cannot be
+         * granted on another device, and it is also not something the account
+         * should hand out. Kept local deliberately. */
+        /* gdPlayedOnMobile is NOT synced: it is a "has this player ever" flag
+         * about the DEVICE, and syncing it would award the achievement to
+         * someone who has never played on a phone at all. */
         /* gdAccountNameChangedAt is deliberately NOT synced: the rename
          * cooldown is per-device, so changing device does not reset it. Syncing
          * it would let a player dodge the wait by switching phones. */
@@ -130,7 +148,13 @@ var cloudWatchTimer = 0;
         'goalDefenderChampionsWins',
         'goalDefenderTournamentsPlayed',
         'tournamentQualifiersWinCount',
-        'tournamentChampionsWinCount'
+        'tournamentChampionsWinCount',
+        /* Best SINGLE run figures. These are records, and a record only ever
+         * goes up, so taking the larger of the two is always correct: a phone
+         * cannot talk the account out of the best run it already had. */
+        'goalDefenderBestRunDeflections',
+        'goalDefenderBestRunPerfects',
+        'goalDefenderPerfectHits'
     ];
 
     var UNIONS = [

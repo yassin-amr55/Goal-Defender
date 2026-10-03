@@ -34,26 +34,24 @@ class LeaderboardScene extends Phaser.Scene {
 
         this.add.rectangle(cx, 360, 1280, 720, 0x000000, 0.62);
 
-        this.add.text(cx, 74, 'LEADERBOARD', {
-            fontSize: '46px', color: '#000000', fontStyle: '900', alpha: 0.45
-        }).setOrigin(0.5);
-
-        this.add.text(cx, 70, 'LEADERBOARD', {
-            fontSize: '46px', color: '#ffffff', fontStyle: '900',
-            stroke: '#f0a500', strokeThickness: 6
-        }).setOrigin(0.5);
+        UI.title(this, { text: 'LEADERBOARD', x: cx, y: 70, size: UI.TYPE.hero - 8 });
 
         /* ---- tabs ---- */
+        /* A soft scrim behind the tab strip. The tabs sat directly on the
+         * stadium floodlights, so the contrast changed across the width of a
+         * single button and the text was unreadable over the lit panels. */
+        this.add.rectangle(cx, 132, 760, 76, 0x0b1220, 0.35);
+
         this.tabLayer = this.add.container(0, 0);
         this.tabLayer.add(UI.button(this, {
             x: cx - 180, y: 132, w: 330, h: 58,
-            label: 'HIGH SCORE', textSize: 22,
+            label: 'HIGH SCORE', textSize: UI.TYPE.body,
             fillTop: 0x4a90c4, fillBottom: 0x2f6b9c, radius: 16,
             onClick: () => this.setTab('highScore')
         }));
         this.tabLayer.add(UI.button(this, {
             x: cx + 180, y: 132, w: 330, h: 58,
-            label: 'TROPHIES', textSize: 22,
+            label: 'TROPHIES', textSize: UI.TYPE.body,
             fillTop: 0x4a90c4, fillBottom: 0x2f6b9c, radius: 16,
             onClick: () => this.setTab('trophies')
         }));
@@ -70,15 +68,25 @@ class LeaderboardScene extends Phaser.Scene {
         this.listLayer = this.add.container(0, 0);
 
         this.statusText = this.add.text(cx, 400, 'Loading...', {
-            fontSize: '22px', color: '#8fa6bd', fontStyle: '700',
+            fontSize: UI.TYPE.body + 'px', color: '#8fa6bd', fontStyle: '700',
             align: 'center', wordWrap: { width: 700 }
         }).setOrigin(0.5);
 
         /* ---- scroll ---- */
-        // Panel is y=400 h=400, so it spans 200..600. Rows must stay inside that:
-        // the old 232..570 range let the last row's text overrun the border.
-        this.listTop = 238;
-        this.listBottom = 566;
+        /* The panel is y=400 h=400, so it spans 200..600.
+         *
+         * Rows used to be 52 tall and positioned at listTop + 52*i + 26, which put
+         * the seventh row's centre at 576. Its background rect is 46 tall, so it
+         * ran 553..599 - one pixel from the panel border, and in the screenshot it
+         * looked cut in half.
+         *
+         * listTop is now the centre of the FIRST row rather than the top of the
+         * list, rows are 48 tall, and the +26 fudge is gone: row i sits at
+         * listTop + 48*i. First row 215..257 (15px under the panel top), last row
+         * 503..545 (55px above the panel bottom), and scrolling is driven purely
+         * by maxScroll. */
+        this.listTop = 236;
+        this.listBottom = 560;
         this.rowInset = 64;   // keeps rank/text clear of the panel border
         this.pointerDown = false;
         this.dragStart = 0;
@@ -110,13 +118,11 @@ class LeaderboardScene extends Phaser.Scene {
 
         this.maxScroll = 0;
 
-        /* ---- nav ---- */
-        UI.button(this, {
-            x: cx, y: 648, w: 220, h: 60,
-            label: 'BACK', textSize: 22,
-            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59, radius: 16,
-            onClick: () => this.scene.start('MenuScene')
-        });
+        /* ---- nav ----
+         * M2: the shared red X, so closing is in the same place on every
+         * sub-screen. Was a bottom-centre BACK, one of three different close
+         * patterns in the game. */
+        UI.closeButton(this, { x: 1240, y: 40, r: 22, onClick: () => this.scene.start('MenuScene') });
 
         this.events.on('shutdown', () => {
             this.input.keyboard.removeAllKeys(true);
@@ -160,7 +166,7 @@ class LeaderboardScene extends Phaser.Scene {
         });
     }
 
-    rowHeight() { return 52; }
+    rowHeight() { return 48; }
 
     /* Is this row the signed-in player?
      *
@@ -200,15 +206,21 @@ class LeaderboardScene extends Phaser.Scene {
             // Content moves UP as scroll increases, so the offset is subtracted.
             // Adding it here pushed every row below the panel when scrolled to
             // the end, leaving the last players invisible.
-            const y = this.listTop + rowH * i - this.scroll + 26;
+            const y = this.listTop + rowH * i - this.scroll;
             // Cull anything outside the panel so scrolling stays cheap.
             if (y < this.listTop - 30 || y > this.listBottom + 30) return;
 
             const container = this.add.container(0, 0);
 
-            const rankColor = i === 0 ? '#ffd700' : i === 1 ? '#c0c8d0' : i === 2 ? '#cd7f32' : '#8fa6bd';
+            /* Gold / silver / bronze for the podium, then one flat muted tone for
+             * every other rank. Previously ranks 4+ shared a colour with the
+             * muted name grey, so the number column looked unfinished. */
+            const rankColor = i === 0 ? '#ffd700'
+                : i === 1 ? '#d7dee6'
+                : i === 2 ? '#e0925a'
+                : '#6d8298';
             container.add(this.add.text(268, y, String(i + 1), {
-                fontSize: '24px', color: rankColor,
+                fontSize: UI.TYPE.lead + 'px', color: rankColor,
                 fontFamily: UI.FAMILY, fontStyle: '900'
             }).setOrigin(0.5));
 
@@ -221,7 +233,7 @@ class LeaderboardScene extends Phaser.Scene {
              * longest username on the board cannot push into the score column. */
             const mine = this.isMine(row);
             container.add(this.add.text(308, y, mine ? 'YOU' : (row.name || 'PLAYER'), {
-                fontSize: '24px', color: mine ? '#3ddc6b' : '#ffffff',
+                fontSize: UI.TYPE.lead + 'px', color: mine ? '#3ddc6b' : '#ffffff',
                 fontFamily: UI.FAMILY, fontStyle: '900'
             }).setOrigin(0, 0.5));
 
@@ -230,27 +242,34 @@ class LeaderboardScene extends Phaser.Scene {
             // Right-aligned value. The panel's inner edge is x=1070, so the anchor sits
         // inside it - at 1076 the text overhung the border.
         container.add(this.add.text(1054, y, window.Achievements.fmt(value) + suffix, {
-                fontSize: '24px', color: '#ffd45e',
+                fontSize: UI.TYPE.lead + 'px', color: '#ffd45e',
                 fontFamily: UI.FAMILY, fontStyle: '900'
             }).setOrigin(1, 0.5));
 
             /* The player's own row gets a green tint behind it. The name itself already
              * says YOU (above), so there is no second label to collide with the
              * rank number. */
+            /* The player's own row gets a green band and a left accent bar.
+             *
+             * The zebra striping is GONE. It was 4% white on alternate rows, and
+             * because it alternated by index rather than by anything meaningful,
+             * the green YOU band landed on a striped row roughly half the time and
+             * the strongest signal on the screen was the weakest. At 48px rows
+             * the separation is not needed anyway - the 24px names do that job. */
             if (mine) {
                 container.addAt(this.add.rectangle(
-                    640, y, 860 - this.rowInset * 2, rowH - 6, 0x3ddc6b, 0.13), 0);
-            } else if (i % 2 === 0) {
-                // Zebra stripe spans the inner panel only, never the border.
-                container.addAt(this.add.rectangle(
-                    640, y, 860 - this.rowInset * 2, rowH - 6, 0xffffff, 0.04), 0);
+                    640, y, 860 - this.rowInset * 2, rowH - 6, 0x3ddc6b, 0.16), 0);
+                const accent = this.add.graphics();
+                accent.fillStyle(0x3ddc6b, 1);
+                accent.fillRoundedRect(232, y - (rowH - 10) / 2, 5, rowH - 10, 3);
+                container.addAt(accent, 1);
             }
 
             this.listLayer.add(container);
         });
 
         // Content height plus the top/bottom padding the first and last rows need.
-        const total = this.rows.length * rowH + 52;
+        const total = this.rows.length * rowH + 44;
         const visible = this.listBottom - this.listTop;
         this.maxScroll = Math.max(0, total - visible);
         this.scroll = this.clampScroll(this.scroll);

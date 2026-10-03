@@ -11,6 +11,11 @@
         this.equippedBall = data.equippedBall
             || localStorage.getItem('goalDefenderEquippedBall')
             || 'default';
+
+        /* Rally Ball pays a growing amount per deflect, so the run has to hand
+         * its total over rather than have it recomputed from a flat rate. */
+        this.rallyEarned = Number(data.rallyEarned) || 0;
+        this.perfects = Number(data.perfects) || 0;
     }
 
     create() {
@@ -44,14 +49,44 @@
             grass.setAlpha(0.4); // Slightly darker than ground
         }
 
-        // PHASE 9: Add money earned ($3 per deflection)
-        // deflections is captured in init() - `data` is not in scope here.
+        /* PHASE 9: Add money earned.
+         *
+         * deflections is captured in init() - `data` is not in scope here.
+         *
+         * Three pay shapes, and only one can apply per run:
+         *   Rally  - the run's own escalating total: 1 + 2 + ... + n
+         *   Money  - a flat $5 per deflect
+         *   normal - a flat $3 per deflect
+         *
+         * Rally is checked FIRST and on its own. It used to be tempting to fold
+         * it in as "rate per deflect", but the whole point is that the rate
+         * changes every tap, so it cannot be expressed as one number. */
         const deflections = this.finalDeflections || this.finalScore;
-        const rate = (this.equippedBall === 'money') ? 5 : 3;
-        const moneyEarned = deflections * rate;
+        let moneyEarned;
+        let rate;
+        if (this.rallyEarned > 0) {
+            moneyEarned = this.rallyEarned;
+            rate = 0;   // not a per-deflect rate; shown as a total only
+        } else {
+            rate = (this.equippedBall === 'money') ? 5 : 3;
+            moneyEarned = deflections * rate;
+        }
         const currentMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0, 10);
         const newTotal = currentMoney + moneyEarned;
         localStorage.setItem('goalDefenderMoney', newTotal);
+
+        /* "On the Go" - finish a run on a phone.
+         *
+         * Recorded once and never cleared: it is a "has ever done it"
+         * achievement, so re-running must not toggle it back off. The coarse
+         * pointer test matches a touchscreen, which is what "on a phone" means
+         * to the player, and layout.js uses the same signal to decide whether
+         * to rotate. */
+        try {
+            const coarse = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+                (navigator.maxTouchPoints || 0) > 0;
+            if (coarse) localStorage.setItem('gdPlayedOnMobile', 'true');
+        } catch (e) { /* matchMedia missing: leave the flag unset */ }
 
         // Title
         this.add.text(640, 132, 'GAME OVER', {

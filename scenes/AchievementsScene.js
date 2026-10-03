@@ -26,36 +26,54 @@ class AchievementsScene extends Phaser.Scene {
 
         /* ---------------- header ---------------- */
 
-        this.add.text(640, 46, 'ACHIEVEMENTS', {
-            fontSize: '44px', color: '#ffffff', fontStyle: '900',
-            stroke: '#f0a500', strokeThickness: 6
-        }).setOrigin(0.5);
+        UI.title(this, {
+            text: 'ACHIEVEMENTS', x: 640, y: 40,
+            size: UI.TYPE.title + 8, fill: '#ffffff'
+        });
 
         const total = Achievements.LIST.length;
         const done = Achievements.unlockedCount();
 
-        this.add.text(640, 92, done + ' of ' + total + ' unlocked', {
-            fontSize: '18px', color: '#9fb3c8', fontStyle: '700'
+        /* S6: this is the single most useful number on the page and it was 18px
+         * muted grey - the same weight as the balance line below it. It is now
+         * lead size, with the fraction in white and the total behind it, and it
+         * carries a slim progress rail so the collection reads as a collection. */
+        this.unlockedLabel = this.add.text(640, 84, '', {
+            fontSize: UI.TYPE.lead + 'px', color: '#ffffff', fontStyle: '900'
         }).setOrigin(0.5);
+
+        this.add.rectangle(640, 110, 320, 5, 0x1b2836, 1).setOrigin(0.5);
+        this.unlockedBar = this.add.rectangle(480, 110, 0, 5, 0x3ddc6b, 1).setOrigin(0, 0.5);
 
         /* ---------------- lifetime deflections, shown on top ---------------- */
 
+        /* S5: this panel had a GREEN border, but green means "on" for every toggle
+         * in the game. A lifetime statistic is not a toggle, so the green was
+         * borrowing a meaning it does not have. The border is now neutral and the
+         * value keeps the green. */
+        /* Header stack, top to bottom: title 40, count 84, rail 110, stat panel
+         * 117..179, money line 189..203, first card row starts at 210.
+         *
+         * The money line was at 214, which is INSIDE the first card row (cards are
+         * centred at 246 with a height of 72, so they span 210..282). It was being
+         * drawn underneath the grid and was only visible in the 7px gap between
+         * the two columns - it read as a stray fragment. */
         UI.panel(this, {
             x: 640, y: 148, w: 520, h: 62, radius: 16,
             fillTop: 0x1f2c3d, fillBottom: 0x121c28,
-            border: 0x3ddc6b, borderWidth: 2
+            border: 0x4a6a8a, borderWidth: 2
         });
 
         this.add.text(500, 148, 'LIFETIME DEFLECTIONS', {
-            fontSize: '15px', color: '#8fa6bd', fontStyle: '800'
+            fontSize: UI.TYPE.small + 'px', color: '#8fa6bd', fontStyle: '800'
         }).setOrigin(0.5, 0.5);
 
         this.add.text(800, 148, Achievements.fmt(Achievements.current('deflections')), {
-            fontSize: '30px', color: '#3ddc6b', fontStyle: '900'
+            fontSize: UI.TYPE.lead + 'px', color: '#3ddc6b', fontStyle: '900'
         }).setOrigin(0.5, 0.5);
 
         this.totalMoneyLabel = this.add.text(640, 196, '', {
-            fontSize: '17px', color: '#ffd45e', fontStyle: '800'
+            fontSize: UI.TYPE.small + 'px', color: '#ffd45e', fontStyle: '800'
         }).setOrigin(0.5);
 
         this.refreshHeader();
@@ -64,19 +82,17 @@ class AchievementsScene extends Phaser.Scene {
          * Created before the first renderPage() because the page buttons
          * enable/disable themselves depending on the current page. */
 
-        UI.button(this, {
-            x: 96, y: 660, w: 150, h: 56,
-            label: 'BACK',
-            textSize: 22,
-            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
-            radius: 14,
+        /* M2: shared red X instead of a bottom-left BACK, so the bottom row is
+         * just PREV / PAGE / NEXT / CLAIM ALL on one line. */
+        UI.closeButton(this, {
+            x: 1240, y: 40, r: 22,
             onClick: () => this.scene.start('MenuScene')
         });
 
         this.prevBtn = UI.button(this, {
             x: 470, y: 660, w: 130, h: 56,
             label: 'PREV',
-            textSize: 20,
+            textSize: UI.TYPE.body,
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
             radius: 14,
             onClick: () => this.changePage(-1)
@@ -85,14 +101,14 @@ class AchievementsScene extends Phaser.Scene {
         this.nextBtn = UI.button(this, {
             x: 810, y: 660, w: 130, h: 56,
             label: 'NEXT',
-            textSize: 20,
+            textSize: UI.TYPE.body,
             fillTop: 0x4a90c4, fillBottom: 0x2f6b9c,
             radius: 14,
             onClick: () => this.changePage(1)
         });
 
         this.pageLabel = this.add.text(640, 660, '', {
-            fontSize: '18px', color: '#9fb3c8', fontStyle: '800'
+            fontSize: UI.TYPE.small + 'px', color: '#9fb3c8', fontStyle: '800'
         }).setOrigin(0.5);
 
         // Only visible while there is something to collect.
@@ -100,7 +116,7 @@ class AchievementsScene extends Phaser.Scene {
         this.claimAllBtn = UI.button(this, {
             x: 1080, y: 660, w: 260, h: 56,
             label: 'CLAIM ALL',
-            textSize: 20,
+            textSize: UI.TYPE.body,
             fillTop: 0xffd45e, fillBottom: 0xc98a08,
             textColor: 0x1a1a1a,
             radius: 14,
@@ -131,6 +147,21 @@ class AchievementsScene extends Phaser.Scene {
             msg += '   -   UNCLAIMED $' + Achievements.fmt(pending);
         }
         this.totalMoneyLabel.setText(msg);
+
+        /* S6: the "N of M unlocked" line and its rail.
+         *
+         * These are created in create() but were never refreshed, so claiming an
+         * achievement left the count stale for the rest of the session - the one
+         * number on the page that is supposed to move when you act. */
+        const total = Achievements.LIST.length;
+        const done = Achievements.unlockedCount();
+        if (this.unlockedLabel) {
+            this.unlockedLabel.setText(done + ' of ' + total + ' unlocked');
+        }
+        if (this.unlockedBar) {
+            const railW = 320;
+            this.unlockedBar.width = total > 0 ? Math.max(2, railW * (done / total)) : 0;
+        }
     }
 
     get pageCount() {
@@ -207,39 +238,58 @@ class AchievementsScene extends Phaser.Scene {
             box.add(icon);
         }
 
-        // Name
-        box.add(this.add.text(x - w / 2 + 74, y - 19, ach.name, {
-            fontSize: '19px',
-            color: unlocked ? '#ffffff' : '#8fa6bd',
+        /* Name */
+        box.add(this.add.text(x - w / 2 + 74, y - 22, ach.name, {
+            fontSize: UI.TYPE.body + 'px',
+            color: unlocked ? '#ffffff' : '#c3d3e2',
             fontStyle: '900'
         }).setOrigin(0, 0.5));
 
-        // Description
+        /* S4: the description is the reason a player looks up what they still need,
+         * and it was 13px while everything around it was 19px. Raised to 14px.
+         *
+         * This card previously used FOUR sizes - 19 / 13 / 11 / 10 - which is the
+         * clearest example of the missing type scale in the game: three of them
+         * were below the 13px floor, and 10px renders at roughly 5px on a small
+         * Android (F-13). Now two sizes: body for the name, small for everything
+         * else. */
         box.add(this.add.text(x - w / 2 + 74, y + 1, ach.desc, {
-            fontSize: '13px',
-            color: unlocked ? '#a9d8bb' : '#6f8296',
+            fontSize: UI.TYPE.small + 'px',
+            color: unlocked ? '#a9d8bb' : '#93a8bd',
             fontStyle: '600'
         }).setOrigin(0, 0.5));
 
-        // Progress bar, kept clear of the right-hand claim column
+        /* Progress bar, kept clear of the right-hand claim column. */
         const barW = w - 234;
         const barX = x - w / 2 + 74;
-        const barY = y + 16;
+        const barY = y + 13;
         box.add(this.add.rectangle(barX, barY, barW, 6, 0x0d1723, 1).setOrigin(0, 0.5));
-        if (prog.pct > 0) {
-            box.add(this.add.rectangle(barX, barY, barW * prog.pct, 6,
-                unlocked ? 0x3ddc6b : 0x4a90c4, 1).setOrigin(0, 0.5));
+        if (unlocked) {
+            /* M10: a completed achievement used to draw a FULL GREEN BAR, which
+             * to anyone not reading the caption looks exactly like "in progress".
+             * It is now solid gold, so "done" reads as done.
+             *
+             * There is deliberately no word inside the bar: it is 6px tall and
+             * any readable label is 12px or more, so the text overflowed its own
+             * track. Completion is already stated twice - by the gold colour and
+             * by the CLAIMED tag in the right-hand column. */
+            box.add(this.add.rectangle(barX, barY, barW, 6, 0xf0b429, 1).setOrigin(0, 0.5));
+        } else if (prog.pct > 0) {
+            box.add(this.add.rectangle(barX, barY, barW * prog.pct, 6, 0x4a90c4, 1).setOrigin(0, 0.5));
         }
 
-        // Progress numbers
-        let pText;
-        if (claimable) pText = 'READY TO CLAIM';
-        else if (unlocked) pText = 'CLAIMED';
-        else pText = Achievements.fmt(prog.current) + ' / ' + Achievements.fmt(prog.goal);
-
-        box.add(this.add.text(x - w / 2 + 74, y + 28, pText, {
-            fontSize: '11px',
-            color: claimable ? '#ffd45e' : (unlocked ? '#3ddc6b' : '#8fa6bd'),
+        /* M10: the footer under the bar is ALWAYS the progress numbers.
+         *
+         * It used to switch meaning with state - "READY TO CLAIM", then
+         * "CLAIMED", then "381 / 500" - while the right-hand column ALSO said
+         * CLAIMED. So a claimed card printed the word CLAIMED twice and carried
+         * no numbers at all. One line, one meaning. */
+        /* y+27, not y+30: a 14px label is 17px tall, so y+30 ran to y+37 and
+         * overhung the 72px card (which ends at y+36). */
+        const progText = Achievements.fmt(prog.current) + ' / ' + Achievements.fmt(prog.goal);
+        box.add(this.add.text(x - w / 2 + 74, y + 27, progText, {
+            fontSize: UI.TYPE.small + 'px',
+            color: unlocked ? '#c9a24a' : '#93a8bd',
             fontStyle: '800'
         }).setOrigin(0, 0.5));
 
@@ -248,7 +298,7 @@ class AchievementsScene extends Phaser.Scene {
             box.add(UI.button(this, {
                 x: x + w / 2 - 82, y: y, w: 140, h: 46,
                 label: 'CLAIM $' + Achievements.fmt(ach.reward),
-                textSize: 15,
+                textSize: UI.TYPE.small,
                 fillTop: 0xffd45e, fillBottom: 0xc98a08,
                 textColor: 0x1a1a1a,
                 radius: 12,
@@ -256,15 +306,16 @@ class AchievementsScene extends Phaser.Scene {
             }));
         } else {
             box.add(this.add.text(x + w / 2 - 16, y - 8, '+$' + Achievements.fmt(ach.reward), {
-                fontSize: '18px',
-                color: unlocked ? '#ffd45e' : '#7d8ea0',
+                fontSize: UI.TYPE.body + 'px',
+                color: unlocked ? '#ffd45e' : '#9fb3c8',
                 fontStyle: '900'
             }).setOrigin(1, 0.5));
 
-            box.add(this.add.text(x + w / 2 - 16, y + 13,
+            /* The ONLY status word on the card. 13px, not 10px. */
+            box.add(this.add.text(x + w / 2 - 16, y + 12,
                 unlocked ? 'CLAIMED' : ach.cat.toUpperCase(), {
-                fontSize: '10px',
-                color: unlocked ? '#8fa6bd' : '#5f7386',
+                fontSize: '13px',
+                color: unlocked ? '#ffd45e' : '#8fa6bd',
                 fontStyle: '800'
             }).setOrigin(1, 0.5));
         }

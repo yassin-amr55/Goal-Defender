@@ -42,6 +42,29 @@ class BootScene extends Phaser.Scene {
         this.load.image('ball_gauntlet', 'assets/balls/ball-gauntlet.png');
         this.load.image('ball_money', 'assets/balls/ball-money.png');
         this.load.image('ball_revive', 'assets/balls/ball-revive.png');
+        this.load.image('ball_inverted', 'assets/balls/ball-inverted.png');
+        this.load.image('ball_focus', 'assets/balls/ball-focus.png');
+        this.load.image('ball_rally', 'assets/balls/ball-rally.png');
+        this.load.image('ball_life', 'assets/balls/ball-life.png');
+        this.load.image('ball_sprung', 'assets/balls/ball-sprung.png');
+
+        /* Fail loudly if a ball texture did not load.
+         *
+         * Every game scene guards its ball with
+         * `this.textures.exists(tex) ? tex : 'ball_default'`, which is the right
+         * thing at runtime - a missing art file must not crash the game. But it
+         * also means a typo in a PATH is invisible: five new balls were wired up
+         * with underscores instead of hyphens, every one 404'd, and all five
+         * silently played as the default ball with no error anywhere.
+         *
+         * So the fallback stays, and this adds the part it cannot do: say so,
+         * naming the ball, at boot rather than in a bug report. */
+        this.load.on('loaderror', (file) => {
+            if (/assets\/balls\//.test(file.src)) {
+                console.error('Ball texture failed to load: ' + file.src +
+                    ' - that ball will be drawn as the default one.');
+            }
+        });
 
         // Volume icons
         this.load.image('volume-unmute', 'assets/volume-unmute.png');

@@ -5,66 +5,18 @@
 
     create() {
 
-        const groundHeight = 100;
-        const groundY = 720;
-        const groundTopY = groundY - groundHeight;
-
-        // Dark background (stadium with dark overlay, alpha 0.9)
-        if (this.textures.exists('background')) {
-            const bg = this.add.image(640, 0, 'background');
-            bg.setOrigin(0.5, 0);
-            bg.setDisplaySize(1280, groundTopY);
-            bg.setAlpha(0.4);
-        } else {
-            this.cameras.main.setBackgroundColor('#1a1a1a');
-        }
-
-        // Dark overlay
-        const overlay = this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.4);
-
-        // Ground at bottom
-        if (this.textures.exists('ground')) {
-            const ground = this.add.image(640, groundY, 'ground');
-            ground.setOrigin(0.5, 1);
-            ground.setDisplaySize(1280, groundHeight);
-            ground.setAlpha(0.3);
-        }
-
-        // Add decorative grass above ground
-        if (this.textures.exists('grass')) {
-            const grass = this.add.image(640, groundTopY + 3, 'grass');
-            grass.setOrigin(0.5, 1);
-            grass.setDisplaySize(1280, grass.height);
-            grass.setAlpha(0.2);
-        }
+        UI.stadium(this, { alpha: 0.4, groundAlpha: 0.3, grassAlpha: 0.2, dim: 0.4 });
 
         // Get trophy data from localStorage
         const qualifiersWinCount = parseInt(localStorage.getItem('tournamentQualifiersWinCount') || '0', 10);
         const championsWinCount = parseInt(localStorage.getItem('tournamentChampionsWinCount') || '0', 10);
         const totalTrophies = qualifiersWinCount + championsWinCount;
 
-        // Title: "TROPHIES: X" at (640, 60)
-        this.add.text(642, 62, `TROPHIES: ${totalTrophies}`, {
-            fontSize: '48px',
-            fill: '#000000',
-            fontStyle: 'bold',
-            alpha: 0.5
-        }).setOrigin(0.5);
-
-        const title = this.add.text(640, 60, `TROPHIES: ${totalTrophies}`, {
-            fontSize: '48px',
-            fill: '#ffcc00',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 5,
-            shadow: {
-                offsetX: 2,
-                offsetY: 2,
-                color: '#000000',
-                blur: 3,
-                fill: true
-            }
-        }).setOrigin(0.5);
+        const title = UI.title(this, {
+            text: 'TROPHIES: ' + totalTrophies, x: 640, y: 66,
+            size: UI.TYPE.hero - 6, fill: '#ffcc00',
+            stroke: '#000000', thickness: 5, offset: 2
+        });
 
         // Glow/pulse effect
         this.tweens.add({
@@ -96,11 +48,16 @@
             true
         );
 
-        // BACK button
+        /* M2: shared red X instead of a bottom-centre BACK. */
+        UI.closeButton(this, {
+            x: 1240, y: 40, r: 22,
+            onClick: () => this.scene.start('TournamentMenuScene')
+        });
+
         UI.button(this, {
             x: 640, y: 656, w: 220, h: 64,
             label: 'BACK',
-            textSize: 24,
+            textSize: UI.TYPE.lead,
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
             radius: 16,
             onClick: () => this.scene.start('TournamentMenuScene')
@@ -114,22 +71,46 @@
         // isWon must be resolved before it is used below
         const isWon = winCount > 0;
 
-        // Display case + wooden shelf
+        /* The card is now 380 tall and spans 170..550, and every element
+         * below is positioned inside it.
+         *
+         * It used to be 300 tall spanning 190..490, while the trophy art was
+         * centred at 280 scaled 0.4 - about 205px tall, so it reached 177..382
+         * and poked 13px out through the top. The "Won: N" line sat at 512, which
+         * is 22px BELOW the card's bottom edge, so it looked like the text had
+         * fallen out of the box. Nothing was clipped, it was simply laid out
+         * without reference to the panel it belonged to. */
+        const CARD_TOP = 170;
+        const CARD_BOTTOM = 550;
+
         UI.panel(this, {
-            x: x, y: 340, w: 360, h: 300, radius: 20,
+            x: x, y: (CARD_TOP + CARD_BOTTOM) / 2, w: 380, h: CARD_BOTTOM - CARD_TOP,
+            radius: 20,
             fillTop: 0x1f2c3d, fillBottom: 0x121c28,
             border: isWon ? 0xf0b429 : 0x3d5a73,
             borderWidth: 2
         });
 
-        const shelf = this.add.rectangle(x, 452, 300, 18, 0x8b7355, 1);
-        shelf.setStrokeStyle(2, 0x5c4a33);
+        /* M5: the shelf was a flat tan rectangle with a hard border, which read
+         * as an unresolved loading placeholder rather than a plinth. Shaded top
+         * face, darker front edge, and narrower than the card so it sits inside
+         * the panel instead of bleeding past its sides. */
+        const shelfY = 392;
+        const shelf = this.add.graphics();
+        shelf.fillStyle(0x000000, 0.25);
+        shelf.fillRoundedRect(x - 130, shelfY - 6, 260, 26, 6);
+        shelf.fillStyle(0x8b7355, 1);
+        shelf.fillRoundedRect(x - 130, shelfY - 10, 260, 18, 5);
+        shelf.fillStyle(0xb59a76, 1);
+        shelf.fillRoundedRect(x - 128, shelfY - 9, 256, 7, 4);
+        shelf.fillStyle(0x5c4a33, 1);
+        shelf.fillRect(x - 130, shelfY + 8, 260, 5);
 
         // Trophy image at y=320 (above shelf)
         let trophyImage = null;
         if (this.textures.exists(trophyImageKey)) {
-            trophyImage = this.add.image(x, 280, trophyImageKey);
-            trophyImage.setScale(0.4);
+            trophyImage = this.add.image(x, 286, trophyImageKey);
+            trophyImage.setScale(0.3);
 
             if (!isWon) {
                 // Grayscale filter for unwon trophies
@@ -140,12 +121,12 @@
                 trophyImage.setAlpha(1);
                 if (isChampions) {
                     // Sparkle particles for Champions trophy
-                    this.createSparkles(x, 280);
+                    this.createSparkles(x, 286);
                 }
             }
         } else if (this.textures.exists('trophy-icon')) {
             // Fallback: vector trophy icon
-            const trophyIcon = this.add.image(x, 280, 'trophy-icon');
+            const trophyIcon = this.add.image(x, 286, 'trophy-icon');
             trophyIcon.setScale(isWon ? 0.55 : 0.45);
             trophyIcon.setAlpha(isWon ? 1 : 0.3);
 
@@ -155,23 +136,23 @@
         }
 
         // Label below shelf: "QUALIFIERS CUP" or "CHAMPIONS CUP"
-        const labelText = this.add.text(x, 484, label, {
-            fontSize: '22px',
+        const labelText = this.add.text(x, 432, label, {
+            fontSize: UI.TYPE.lead + 'px',
             color: '#ffffff',
             fontStyle: '800'
         }).setOrigin(0.5);
 
         // Win count
-        const countText = this.add.text(x, 512, `Won: ${winCount}`, {
-            fontSize: '18px',
+        const countText = this.add.text(x, 468, `Won: ${winCount}`, {
+            fontSize: UI.TYPE.body + 'px',
             color: isWon ? '#ffd45e' : '#7f8c99',
             fontStyle: '800'
         }).setOrigin(0.5);
 
         // Date won (if won)
         if (isWon && dateWon) {
-            const dateText = this.add.text(x, 540, `Last: ${dateWon}`, {
-                fontSize: '13px',
+            const dateText = this.add.text(x, 500, `Last: ${dateWon}`, {
+                fontSize: UI.TYPE.micro + 'px',
                 color: '#93a8bd'
             }).setOrigin(0.5);
 
@@ -182,8 +163,8 @@
 
             // awardTrophy() writes { date, matchesWon, totalDeflects, moneyEarned }
             if (statsData.totalDeflects !== undefined) {
-                const statsText = this.add.text(x, 568, `Deflects: ${statsData.totalDeflects}\nMoney: $${statsData.moneyEarned || 0}`, {
-                    fontSize: '12px',
+                const statsText = this.add.text(x, 528, `Deflections: ${statsData.totalDeflects}\nMoney: $${statsData.moneyEarned || 0}`, {
+                    fontSize: UI.TYPE.micro + 'px',
                     color: '#93a8bd',
                     fontStyle: '600',
                     align: 'center'

@@ -39,47 +39,41 @@
             grass.setAlpha(0.4);
         }
 
-        // Tournament mode display at (640, 150)
-        const modeColor = this.tournamentMode === 'qualifiers' ? '#c0c0c0' : '#ffd700'; // Silver or gold
+        /* M6: "QUALIFIERS CUP" sat at y=150 and "ENTER YOUR TEAM NAME" at y=200 -
+         * 50px apart, with a 48px instruction over a 32px context. Their glyphs
+         * physically overlapped, and the INSTRUCTION was the larger of the two,
+         * which inverts the hierarchy: the cup is the context, the instruction is
+         * the action.
+         *
+         * Now the context is a small tertiary label at y=132 and the instruction
+         * is the title at y=184, 52px below it with no overlap. */
+        const modeColor = this.tournamentMode === 'qualifiers' ? '#c0c0c0' : '#ffd700';
         const modeText = this.tournamentMode === 'qualifiers' ? 'QUALIFIERS CUP' : 'CHAMPIONS CUP';
 
-        this.add.text(642, 152, modeText, {
-            fontSize: '32px',
-            fill: '#000000',
-            fontStyle: 'bold',
-            alpha: 0.5
-        }).setOrigin(0.5);
-
-        this.add.text(640, 150, modeText, {
-            fontSize: '32px',
-            fill: modeColor,
-            fontStyle: 'bold',
+        this.add.text(640, 132, modeText, {
+            fontSize: UI.TYPE.body + 'px',
+            color: modeColor,
+            fontFamily: UI.FAMILY,
+            fontStyle: '900',
             stroke: '#000000',
-            strokeThickness: 4
+            strokeThickness: 3
         }).setOrigin(0.5);
 
-        // Title at (640, 200)
-        this.add.text(642, 202, 'ENTER YOUR TEAM NAME', {
-            fontSize: '48px',
-            fill: '#000000',
-            fontStyle: 'bold',
-            alpha: 0.5
-        }).setOrigin(0.5);
+        UI.title(this, {
+            text: 'ENTER YOUR TEAM NAME', x: 640, y: 186,
+            size: UI.TYPE.title + 8, fill: '#ffffff',
+            stroke: '#000000', thickness: 5
+        });
 
-        this.add.text(640, 200, 'ENTER YOUR TEAM NAME', {
-            fontSize: '48px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 5
-        }).setOrigin(0.5);
-
-        // Input box background at (640, 360)
-        // Rounded backing panel behind the HTML input
+        /* M7: the lighter inner rect behind the DOM input did not match any panel
+         * in the game and read as a rendering artefact. The field colour now
+         * matches NamePromptScene's exactly, so the two name inputs are
+         * identical: same panel colour, same border, same radius, same focus
+         * ring. */
         UI.panel(this, {
             x: 640, y: 360, w: 540, h: 92, radius: 20,
-            fillTop: 0x0d1723, fillBottom: 0x080f18,
-            border: 0xf0b429, borderWidth: 2, depth: 8
+            fillTop: 0x0d1620, fillBottom: 0x0d1620,
+            border: 0x4a6a8a, borderWidth: 2, depth: 8
         });
 
         // Create HTML input element overlay
@@ -174,11 +168,17 @@
             }
         });
 
-        // BACK button
+        /* M2: shared red X instead of a bottom-centre BACK, so closing is in the
+         * same place on every sub-screen. */
+        UI.closeButton(this, {
+            x: 1240, y: 40, r: 22,
+            onClick: () => this.scene.start('TournamentMenuScene')
+        });
+
         UI.button(this, {
             x: 640, y: 578, w: 220, h: 64,
             label: 'BACK',
-            textSize: 24,
+            textSize: UI.TYPE.lead,
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
             radius: 16,
             onClick: () => {

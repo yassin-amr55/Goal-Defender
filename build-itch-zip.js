@@ -62,8 +62,23 @@ function collectAssets(dir, rel) {
 
 const entries = FILES.concat(collectAssets(path.join(ROOT, 'assets'), ''));
 
+/* Development documentation must never ship.
+ *
+ * The allow-list above already keeps every top-level .js out by omission, and
+ * md/ sits at the repo root so collectAssets() cannot reach it. This asserts
+ * that rather than trusting it: all project documentation now lives in md/, so
+ * if a future edit ever globs the repo instead of assets/, this fails the build
+ * instead of quietly uploading the planning docs to itch. */
+
 /* ---- refuse to build a broken upload ---- */
-let problems = 0;
+var problems = 0;
+for (const e of entries) {
+    if (/^md\//.test(e) ||
+        /(^|\/)(update-plan|TEST-RESULTS|TOURNAMENT|To-Do|BETTER|GAME_DISCRIPTION|v2\.1)\.md$/i.test(e)) {
+        console.log('DEV DOC WOULD SHIP: ' + e);
+        problems++;
+    }
+}
 for (const f of FILES) {
     if (!fs.existsSync(path.join(ROOT, f))) {
         console.log('MISSING  ' + f);

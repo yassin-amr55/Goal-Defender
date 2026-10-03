@@ -36,22 +36,10 @@
 
         /* ---------------- title ---------------- */
 
-        // Layered drop shadow instead of a flat offset copy
-        this.add.text(640, 128, 'GOAL DEFENDER', {
-            fontSize: '82px',
-            fontFamily: UI.FAMILY,
-            fontStyle: '900',
-            color: '#000000'
-        }).setOrigin(0.5).setAlpha(0.45);
-
-        const title = this.add.text(640, 126, 'GOAL DEFENDER', {
-            fontSize: '82px',
-            fontFamily: UI.FAMILY,
-            fontStyle: '900',
-            color: '#ffffff',
-            stroke: '#f0a500',
-            strokeThickness: 9
-        }).setOrigin(0.5);
+        const title = UI.title(this, {
+            text: 'GOAL DEFENDER', x: 640, y: 126,
+            size: 82, fill: '#ffffff', stroke: '#f0a500', thickness: 9
+        });
 
         this.tweens.add({
             targets: title,
@@ -97,15 +85,20 @@
             onClick: () => this.scene.start('ShopScene')
         });
 
-        const rowY = 522;
-        const smallW = 176;   // half the width of the main buttons
-        const smallH = 46;    // half the height
-        const gap = 16;
+        /* TOURNAMENT is a full mode - brackets, cups, a streak counter and a
+         * trophy room - and it was rendered at 15px in a 176px button, the same
+         * size as a version stamp. Widened to 210 and raised to 20px so it reads
+         * as a destination. LEARN TO PLAY stays quieter: it is genuinely
+         * optional, so it sits one step below the modes. */
+        const rowY = 528;
+        const smallW = 210;
+        const smallH = 52;
+        const gap = 20;
 
         const tournamentBtn = UI.button(this, {
             x: 640 - (smallW + gap) / 2, y: rowY, w: smallW, h: smallH,
             label: 'TOURNAMENT',
-            textSize: 15,
+            textSize: 20,
             fillTop: 0xf0b429, fillBottom: 0xc98a08,
             onClick: () => this.scene.start('TournamentMenuScene')
         });
@@ -127,10 +120,17 @@
          * under each icon and is part of the same hit area, so the whole block
          * is one target rather than a 34px circle. */
 
+        /* These two gates lead to a 39-item collection worth over a billion
+         * dollars and to the leaderboard - the deepest content in the game - and
+         * they were the smallest labels on the menu, crowded so tightly that the
+         * AWARDS caption overlapped the RANKS icon above it.
+         *
+         * Icon centres are 112px apart now (48 and 160) with a 40px radius and an
+         * 18px caption, so each caption clears the icon below it by ~21px. */
         UI.iconButton(this, {
-            x: 52, y: 52, radius: 34,
-            icon: 'medal-icon', iconScale: 0.34,
-            label: 'AWARDS',
+            x: 58, y: 48, radius: 40,
+            icon: 'medal-icon', iconScale: 0.38,
+            label: 'AWARDS', labelSize: UI.TYPE.body,
             fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
             depth: 50,
             onClick: () => this.scene.start('AchievementsScene')
@@ -139,42 +139,59 @@
         /* ---------------- leaderboard (under the medal) ---------------- */
 
         UI.iconButton(this, {
-            x: 52, y: 142, radius: 34,
-            icon: 'podium-icon', iconScale: 0.36,
-            label: 'RANKS',
+            x: 58, y: 160, radius: 40,
+            icon: 'podium-icon', iconScale: 0.40,
+            label: 'RANKS', labelSize: UI.TYPE.body,
             fillTop: 0xf0a500, fillBottom: 0xc98a08,
             depth: 50,
             onClick: () => this.scene.start('LeaderboardScene')
         });
 
         /* ---------------- account (top right, under settings + mute) --------
-         * Text only with an outline, no filled background.
-         *
-         * Anchored at x=1244 with origin (1, 0.5) so it grows leftwards and can
-         * never run off the right edge. The previous filled button at x=1236
-         * with w=170 spanned out to 1321, past the 1280 canvas. */
-        const signedIn = window.GDAccount && window.GDAccount.isSignedIn();
-        this.accountLabel = this.makeAccountText(
-            signedIn ? (window.GDAccount.username() || 'player') : 'SIGN IN',
-            signedIn ? '#ffd45e' : '#ffffff'
-        );
-        this.accountLabel.on('pointerdown', () => this.scene.start('AccountScene'));
+         * A pill sized to its own text, anchored so its RIGHT edge is at 1244 and
+         * it grows leftwards - it can never run off the canvas edge, which a
+         * previous fixed-width button at x=1236 with w=170 did. */
+        this.makeAccountSlot();
 
         /* ---------------- floating ball ---------------- */
 
         const equippedBall = localStorage.getItem('goalDefenderEquippedBall') || 'default';
         const ballTexture = this.getBallTexture(equippedBall);
 
+        /* S2: the ball floated at y=380..480 with nothing beneath it, which is
+         * inside the crowd - it read as a sticker that had slipped rather than an
+         * object in the scene. It now sits just above the pitch (which starts at
+         * y=620) and carries a soft contact shadow that tracks it, so it reads as
+         * bouncing on the ground. */
+        const pitchTop = groundTopY;
+
         if (this.textures.exists(ballTexture)) {
+            const ballShadow = this.add.graphics().setAlpha(0.28);
             const ball = this.add.image(250, 430, ballTexture);
             ball.setScale(0.3);
             this.tweens.add({
                 targets: ball,
-                y: { from: 380, to: 480 },
+                y: { from: 470, to: pitchTop - 96 },
                 duration: 1500,
                 yoyo: true,
                 repeat: -1,
                 ease: 'Sine.easeInOut'
+            });
+            /* Shadow grows and darkens as the ball approaches the pitch, which is
+             * what sells the height. */
+            this.tweens.add({
+                targets: ballShadow,
+                alpha: { from: 0.1, to: 0.34 },
+                duration: 1500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut',
+                onUpdate: () => {
+                    const t = 1 - (ball.y - 470) / (pitchTop - 96 - 470);
+                    ballShadow.clear();
+                    ballShadow.fillStyle(0x000000, 1);
+                    ballShadow.fillEllipse(250, pitchTop + 6, 90 + t * 70, 16 + t * 12);
+                }
             });
             this.tweens.add({
                 targets: ball,
@@ -195,14 +212,18 @@
 
         /* ---------------- version ---------------- */
 
-        this.add.text(1256, 692, UI.VERSION, {
-            fontSize: '19px',
+        /* Was 19px - larger than TOURNAMENT (15px), LEARN TO PLAY (15px), AWARDS
+         * and RANKS. A grey corner stamp competing with real navigation is a
+         * hierarchy inversion: the eye reads size as importance. Now micro, and
+         * quieter still. */
+        this.add.text(1262, 700, UI.VERSION, {
+            fontSize: UI.TYPE.micro + 'px',
             fontFamily: UI.FAMILY,
-            fontStyle: '800',
-            color: '#ffffff',
+            fontStyle: '700',
+            color: '#cfe0f0',
             stroke: '#000000',
-            strokeThickness: 3
-        }).setOrigin(1, 1).setAlpha(0.55);
+            strokeThickness: 2
+        }).setOrigin(1, 1).setAlpha(0.4);
 
         // Top-right cluster: settings gear (small) + mute
         UI.topRight(this, {
@@ -252,55 +273,131 @@
         window.GDPlayer.submit({ force: true });
     }
 
-    /* Outlined text control for the account slot: no background, just a bright
-     * fill with a dark outline so it reads clearly over the stadium art. */
-    makeAccountText(text, color) {
-        const t = this.add.text(1244, 96, text, {
-            fontSize: '21px',
-            color: color,
+    /* ---------------- account slot ----------------
+     *
+     * This was bare outlined text with a coloured "glow" copy behind it, and it
+     * was the ugliest thing on the menu.
+     *
+     * The glow used the SAME colour as the fill with a 7px stroke at 12% alpha.
+     * That is not a glow - it is a thick ring of the text's own colour sitting
+     * behind a dark-outlined copy of the text, and at 18px the two fought each
+     * other into an amber blob (signed in) or a white cloud (signed out). Around
+     * round letters it extended well past the glyphs, which is what made it look
+     * like a smudge rather than a label.
+     *
+     * It is now a proper pill, built from the same parts as every other chip in
+     * the game (the shop's money pill and the menu's BEST pill): a dark rounded
+     * panel, a coloured border, a crisp label with NO outline, and a drawn
+     * person glyph so the control is identifiable at a glance.
+     *
+     * There is no account icon asset, and the game uses no emoji, so the glyph is
+     * a head circle plus a shoulder arc drawn with Graphics.
+     *
+     * Colour carries the state: gold border and gold text when signed in (the
+     * game's "this is the one" colour), neutral blue when signed out. */
+    makeAccountSlot() {
+        /* Right edge derived from the top-right cluster so the two line up.
+         *
+         * TOP_RIGHT_X is the centre of the gear circle, and MenuScene gives that
+         * cluster a radius of 25 with a 3px border, so its outer painted edge is
+         * centre + radius + 1. Measured on the rendered canvas, the gear's fill
+         * ends at x=1261 and the sky resumes at 1262.
+         *
+         * The pill was previously right-anchored at 1244, which put its edge 17px
+         * short of the gear's. In the same corner that reads as a mistake rather
+         * than as a deliberate inset. */
+        const right = UI.TOP_RIGHT_X + 26;
+        const cy = 96;
+        const h = 46;
+        const padX = 18;
+        const glyphW = 30;
+        const gap = 12;
+
+        this.accountPill = this.add.graphics().setDepth(48);
+        this.accountGlyph = this.add.graphics().setDepth(49);
+        this.accountLabel = this.add.text(0, 0, '', {
+            fontSize: UI.TYPE.body + 'px',
+            color: '#ffffff',
             fontFamily: UI.FAMILY,
-            fontStyle: '900',
-            stroke: '#0b1220',
-            strokeThickness: 7
-        }).setOrigin(1, 0.5).setDepth(50);
+            fontStyle: '900'
+        }).setOrigin(0, 0.5).setDepth(50);
 
-        // A soft second outline underneath, which reads as a glow and keeps
-        // the label legible against both the sky and the dark stands.
-        const glow = this.add.text(1244, 96, text, {
-            fontSize: '21px',
-            color: color,
-            fontFamily: UI.FAMILY,
-            fontStyle: '900',
-            stroke: color,
-            strokeThickness: 12,
-            fillAlpha: 0.16
-        }).setOrigin(1, 0.5).setDepth(49);
+        const self = this;
+        function paint(text, signedIn) {
+            const label = self.accountLabel;
+            label.setText(text);
 
-        t.setInteractive({ useHandCursor: true });
-        t.on('pointerover', () => { t.setScale(1.08); });
-        t.on('pointerout', () => { t.setScale(1); });
+            const w = padX * 2 + glyphW + gap + label.width;
+            const x = right - w / 2;
+            const left = x - w / 2;
 
-        t.gdGlow = glow;
-        return t;
+            label.x = left + padX + glyphW + gap;
+            label.y = cy;
+            label.setColor(signedIn ? '#ffd45e' : '#ffffff');
+
+            const g = self.accountPill;
+            g.clear();
+            // Shadow, inset and tucked like every other chip.
+            g.fillStyle(0x000000, 0.30);
+            g.fillRoundedRect(left + 2, cy - h / 2 + 4, w - 4, h, h / 2 - 1);
+            // Body.
+            g.fillGradientStyle(0x22334a, 0x22334a, 0x101a26, 0x101a26, 1);
+            g.fillRoundedRect(left, cy - h / 2, w, h, h / 2);
+            // Border: gold when signed in, neutral when not.
+            g.lineStyle(2, signedIn ? 0xf0b429 : 0x54687d, 1);
+            g.strokeRoundedRect(left, cy - h / 2, w, h, h / 2);
+
+            // Person glyph: head + shoulders, centred in its own column.
+            const gx = left + padX + glyphW / 2;
+            const gc = signedIn ? 0xffd45e : 0xb9c9da;
+            const gl = self.accountGlyph;
+            gl.clear();
+            gl.fillStyle(gc, 1);
+            gl.fillCircle(gx, cy - 8, 7);
+            gl.fillRoundedRect(gx - 11, cy + 2, 22, 12, 6);
+
+            // Hit area covers the whole pill, not just the text.
+            if (self.accountZone) self.accountZone.setPosition(cx_(left, w), cy);
+            self.accountW = w;
+            self.accountLeft = left;
+        }
+        function cx_(left, w) { return left + w / 2; }
+
+        this.paintAccount = paint;
+
+        this.accountZone = this.add.zone(right, cy, 200, h + 10).setOrigin(0.5);
+        this.accountZone.setInteractive({ useHandCursor: true });
+        this.accountZone.setDepth(51);
+        this.accountZone.on('pointerdown', () => this.scene.start('AccountScene'));
+        this.accountZone.on('pointerover', () => {
+            this.tweens.add({ targets: this.accountZone, scale: 1.04, duration: 110, ease: 'Quad.easeOut' });
+            this.tweens.add({ targets: [this.accountLabel, this.accountPill, this.accountGlyph], scale: 1.04, duration: 110, ease: 'Quad.easeOut' });
+        });
+        this.accountZone.on('pointerout', () => {
+            this.tweens.add({ targets: this.accountZone, scale: 1, duration: 110, ease: 'Quad.easeOut' });
+            this.tweens.add({ targets: [this.accountLabel, this.accountPill, this.accountGlyph], scale: 1, duration: 110, ease: 'Quad.easeOut' });
+        });
+
+        const signedIn = !!(window.GDAccount && window.GDAccount.isSignedIn());
+        paint(signedIn ? (window.GDAccount.username() || 'player') : 'SIGN IN', signedIn);
+        return this.accountLabel;
     }
 
     /* Swap the account text between SIGN IN and the username.
      *
-     * Updates the EXISTING label rather than destroying and rebuilding it.
+     * Repaints the EXISTING pill rather than destroying and rebuilding it.
      * Rebuilding left an orphaned label behind whenever create() ran more than
      * once, which is what produced two overlapping texts on the menu and a
-     * SIGN IN that refused to disappear. */
+     * SIGN IN that refused to disappear. The pill is also re-measured, because
+     * "SIGN IN" and a username are very different widths. */
     refreshAccountSlot() {
         const A = window.GDAccount;
-        if (!A || !this.accountLabel) return;
+        if (!A || !this.paintAccount) return;
         const signedIn = A.isSignedIn();
         const text = signedIn ? (A.username() || 'player') : 'SIGN IN';
-        const color = signedIn ? '#ffd45e' : '#ffffff';
-        this.accountLabel.setText(text);
-        this.accountLabel.setColor(color);
-        if (this.accountLabel.gdGlow) {
-            this.accountLabel.gdGlow.setText(text);
-            this.accountLabel.gdGlow.setColor(color);
+        this.paintAccount(text, signedIn);
+        if (this.accountZone) {
+            this.accountZone.width = (this.accountW || 200) + 12;
         }
     }
 
@@ -320,7 +417,12 @@
             'void': 'ball_void',
             'gauntlet': 'ball_gauntlet',
             'money': 'ball_money',
-            'revive': 'ball_revive'
+            'revive': 'ball_revive',
+'inverted': 'ball_inverted',
+'focus': 'ball_focus',
+'rally': 'ball_rally',
+'life': 'ball_life',
+'sprung': 'ball_sprung',
         };
         return textureMap[ballId] || 'ball_default';
     }

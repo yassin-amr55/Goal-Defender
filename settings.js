@@ -9,7 +9,14 @@
 
     var DEFAULTS = {
         gdShake: 'true',          // screen shake when you deflect the ball
-        gdParticles: 'true',      // ball trail + explosion particles
+        gdParticles: 'true',      // explosion particles on a deflect
+        /* The ball trail is separate from particles.
+         *
+         * Both were behind one toggle, so a player on a slow phone who wanted
+         * the trail off had to lose the deflect explosion as well. The trail is
+         * the expensive one - it emits a particle every few frames for the whole
+         * run - so it is now its own switch. */
+        gdBallTrail: 'true',    // the streak that follows the ball
         gdHitboxAlways: 'false',  // always show the clickable hitbox
         gdMuted: 'false'          // sound
     };

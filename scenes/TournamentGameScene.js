@@ -96,6 +96,7 @@
         // loadBallAbilities() above has already zeroed every ability, so this
         // is the normal ball in whatever outfit the player picked.
         const ballTexture = this.getBallTexture();
+        // Trail is a separate setting from particles; see GameScene.
         const finalTexture = this.textures.exists(ballTexture) ? ballTexture : 'ball_default';
 
         const ballStartY = 400;
@@ -112,8 +113,8 @@
         const dirRandom = Math.random() < 0.5 ? -1 : 1;
         this.ball.setVelocity(this.ballSpeed * dirRandom, 0);
 
-        // Ball trail
-        if (!window.Settings || window.Settings.isOn('gdParticles')) {
+        // Ball trail - its own setting, separate from the explosion particles.
+        if (!window.Settings || window.Settings.isOn('gdBallTrail')) {
             this.ballTrail = this.add.particles(0, 0, finalTexture, {
                 speed: 50,
                 scale: { start: 0.15, end: 0 },
@@ -283,6 +284,21 @@
         this.boostStepMain = 1.04;
         this.boostStepLate = 1.02;
         this.startHitboxMin = false;
+
+        /* Neutralise the newer ability fields too.
+         *
+         * Tournaments deliberately disable every ball ability so all entrants
+         * play on identical footing. This list had not caught up with the
+         * fields added since, so a future ball could set one of them in
+         * GameScene and leak into tournaments by omission rather than by
+         * intent. Zeroed here rather than left undefined so the values are
+         * real and comparable. */
+        this.revivesLeft = 0;
+        this.fixedHitbox = 0;
+        this.perfectRadius = 0;
+        this.perfectScore = 0;
+        this.rallyMoney = false;
+        this.rallyEarned = 0;
     }
 
     getBallTexture() {
@@ -301,7 +317,12 @@
             'void': 'ball_void',
             'gauntlet': 'ball_gauntlet',
             'money': 'ball_money',
-            'revive': 'ball_revive'
+            'revive': 'ball_revive',
+'inverted': 'ball_inverted',
+'focus': 'ball_focus',
+'rally': 'ball_rally',
+'life': 'ball_life',
+'sprung': 'ball_sprung',
         };
         return textureMap[this.equippedBall] || 'ball_default';
     }

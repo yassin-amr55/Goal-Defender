@@ -22,21 +22,22 @@ class TournamentBracketScene extends Phaser.Scene {
     }
 
     create() {
-        // Background
-        this.cameras.main.setBackgroundColor('#1a1a1a');
+        /* The bracket used to be a flat black void while every other screen was
+         * a stadium. It is the one content-heavy screen in the tournament - 16
+         * team names and five round headers - so the emptiness read as a debug
+         * view rather than a design choice. */
+        UI.stadium(this, { alpha: 0.55, groundAlpha: 0.35, grassAlpha: 0.25, dim: 0.45 });
 
         // Load existing bracket or generate new one
         this.loadOrGenerateBracket();
 
         // Title
         const tournamentName = this.mode === 'qualifiers' ? 'QUALIFIERS CUP' : 'CHAMPIONS CUP';
-        this.add.text(640, 50, tournamentName, {
-            fontSize: '36px',
-            fill: '#ffcc00',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 3
-        }).setOrigin(0.5);
+        UI.title(this, {
+            text: tournamentName, x: 640, y: 52,
+            size: UI.TYPE.title, fill: '#ffcc00',
+            stroke: '#000000', thickness: 4, offset: 2
+        });
 
         // Current round indicator
         let roundName = this.currentRound;
@@ -46,8 +47,8 @@ class TournamentBracketScene extends Phaser.Scene {
         else if (roundName === 'semiFinals') roundName = 'SEMI FINALS';
         else if (roundName === 'finals') roundName = 'FINALS';
 
-        this.add.text(640, 90, `Next: ${roundName}`, {
-            fontSize: '24px',
+        this.add.text(640, 98, `Next: ${roundName}`, {
+            fontSize: UI.TYPE.body + 'px',
             fill: '#ffffff',
             fontStyle: 'bold',
             stroke: '#000000',
@@ -61,7 +62,7 @@ class TournamentBracketScene extends Phaser.Scene {
         UI.button(this, {
             x: 640, y: 662, w: 280, h: 64,
             label: 'PLAY MATCH',
-            textSize: 24,
+            textSize: UI.TYPE.lead,
             fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
             radius: 16,
             onClick: () => {
@@ -73,17 +74,14 @@ class TournamentBracketScene extends Phaser.Scene {
             }
         });
 
-        // Back to menu button
-        UI.button(this, {
-            x: 130, y: 662, w: 180, h: 56,
-            label: 'BACK',
-            textSize: 20,
-            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
-            radius: 14,
-            onClick: () => {
-                // Tournament remains active when going back to menu
-                this.scene.start('TournamentMenuScene');
-            }
+        /* M2: the red X from Settings, so closing is in the same place on every
+         * sub-screen instead of BACK at bottom-left here and bottom-centre there.
+         * Placed in the top-right corner because the bracket columns run from
+         * x=120 to x=1080 and a panel-relative position would land on the
+         * WINNER column. */
+        UI.closeButton(this, {
+            x: 1240, y: 40, r: 22,
+            onClick: () => this.scene.start('TournamentMenuScene')
         });
     }
 
@@ -177,14 +175,21 @@ class TournamentBracketScene extends Phaser.Scene {
     }
 
     drawBracket16() {
-        const startY = 140;
-        const spacing = 60;
-        const boxWidth = 140;
-        const boxHeight = 25;
+        /* startY 138 with spacing 58 puts the 16th team box at 574, ending at
+         * 587 - which clears the top of the PLAY MATCH button (630) by 43px. It
+         * was 590 / spacing 60, ending at 602 with only 28px of clearance, and on
+         * a 32-team bracket the grid ran straight through the bottom bar.
+         *
+         * boxWidth 140 -> 160 because the team name went from 12px to 14px and
+         * 140px could no longer hold a long name without clipping. */
+        const startY = 152;
+        const spacing = 58;
+        const boxWidth = 160;
+        const boxHeight = 26;
         const playerTeam = localStorage.getItem('tournamentTeamName') || 'Your Team';
 
         // Round of 16 (left side)
-        this.add.text(200, 120, 'ROUND OF 16', { fontSize: '16px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(200, 126, 'ROUND OF 16', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
 
         const r16Matches = this.bracket.roundOf16 || [];
         for (let i = 0; i < 8; i++) {
@@ -192,18 +197,22 @@ class TournamentBracketScene extends Phaser.Scene {
             const y = startY + i * spacing;
 
             // Team 1
-            const team1Color = match.team1 === playerTeam ? 0xffff00 : (match.winner === match.team1 ? 0x00aa00 : 0x4488cc);
-            this.add.rectangle(200, y, boxWidth, boxHeight, team1Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(200, y, this.truncateTeamName(match.team1), { fontSize: '12px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            const isPlayer1 = match.team1 === playerTeam;
+            const team1Color = isPlayer1 ? 0xffff00 : (match.winner === match.team1 ? 0x00aa00 : 0x4488cc);
+            this.add.rectangle(200, y, boxWidth, boxHeight, team1Color, 1).setStrokeStyle(isPlayer1 ? 3 : 1, isPlayer1 ? 0xffffff : 0xffffff);
+            this.add.text(200, y, this.truncateTeamName(match.team1), { fontSize: UI.TYPE.small + 'px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            if (isPlayer1) this.drawPlayerMarker(200, y, boxHeight);
 
             // Team 2
-            const team2Color = match.team2 === playerTeam ? 0xffff00 : (match.winner === match.team2 ? 0x00aa00 : 0x4488cc);
-            this.add.rectangle(200, y + 30, boxWidth, boxHeight, team2Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(200, y + 30, this.truncateTeamName(match.team2), { fontSize: '12px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            const isPlayer2 = match.team2 === playerTeam;
+            const team2Color = isPlayer2 ? 0xffff00 : (match.winner === match.team2 ? 0x00aa00 : 0x4488cc);
+            this.add.rectangle(200, y + 30, boxWidth, boxHeight, team2Color, 1).setStrokeStyle(isPlayer2 ? 3 : 1, 0xffffff);
+            this.add.text(200, y + 30, this.truncateTeamName(match.team2), { fontSize: UI.TYPE.small + 'px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            if (isPlayer2) this.drawPlayerMarker(200, y + 30, boxHeight);
         }
 
         // Quarter Finals - should show 8 teams (4 matches)
-        this.add.text(400, 120, 'QUARTER FINALS', { fontSize: '16px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(400, 126, 'QUARTER FINALS', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
         const qfMatches = this.bracket.quarterFinals || [];
         for (let i = 0; i < 4; i++) {
             const match = qfMatches[i] || { team1: 'TBD', team2: 'TBD', winner: null };
@@ -212,16 +221,16 @@ class TournamentBracketScene extends Phaser.Scene {
             // Team 1
             const team1Color = match.team1 === playerTeam ? 0xffff00 : (match.winner === match.team1 ? 0x00aa00 : (match.team1 !== 'TBD' ? 0x4488cc : 0x666666));
             this.add.rectangle(400, y, boxWidth, boxHeight, team1Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(400, y, this.truncateTeamName(match.team1 || 'TBD'), { fontSize: '12px', fill: team1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            this.add.text(400, y, this.truncateTeamName(match.team1 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
 
             // Team 2
             const team2Color = match.team2 === playerTeam ? 0xffff00 : (match.winner === match.team2 ? 0x00aa00 : (match.team2 !== 'TBD' ? 0x4488cc : 0x666666));
             this.add.rectangle(400, y + 30, boxWidth, boxHeight, team2Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(400, y + 30, this.truncateTeamName(match.team2 || 'TBD'), { fontSize: '12px', fill: team2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            this.add.text(400, y + 30, this.truncateTeamName(match.team2 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
         }
 
         // Semi Finals - should show 4 teams (2 matches)
-        this.add.text(600, 120, 'SEMI FINALS', { fontSize: '16px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(600, 126, 'SEMI FINALS', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
         const sfMatches = this.bracket.semiFinals || [];
         for (let i = 0; i < 2; i++) {
             const match = sfMatches[i] || { team1: 'TBD', team2: 'TBD', winner: null };
@@ -230,30 +239,30 @@ class TournamentBracketScene extends Phaser.Scene {
             // Team 1
             const team1Color = match.team1 === playerTeam ? 0xffff00 : (match.winner === match.team1 ? 0x00aa00 : (match.team1 !== 'TBD' ? 0x4488cc : 0x666666));
             this.add.rectangle(600, y, boxWidth, boxHeight, team1Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(600, y, this.truncateTeamName(match.team1 || 'TBD'), { fontSize: '12px', fill: team1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            this.add.text(600, y, this.truncateTeamName(match.team1 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
 
             // Team 2
             const team2Color = match.team2 === playerTeam ? 0xffff00 : (match.winner === match.team2 ? 0x00aa00 : (match.team2 !== 'TBD' ? 0x4488cc : 0x666666));
             this.add.rectangle(600, y + 30, boxWidth, boxHeight, team2Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(600, y + 30, this.truncateTeamName(match.team2 || 'TBD'), { fontSize: '12px', fill: team2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            this.add.text(600, y + 30, this.truncateTeamName(match.team2 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
         }
 
         // Finals - should show 2 teams (1 match)
-        this.add.text(800, 120, 'FINALS', { fontSize: '16px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(800, 126, 'FINALS', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
         const finalMatch = this.bracket.finals || { team1: 'TBD', team2: 'TBD', winner: null };
 
         // Team 1
         const final1Color = finalMatch.team1 === playerTeam ? 0xffff00 : (finalMatch.winner === finalMatch.team1 ? 0x00aa00 : (finalMatch.team1 !== 'TBD' ? 0x4488cc : 0x666666));
         this.add.rectangle(800, startY + 210, boxWidth, boxHeight, final1Color, 1).setStrokeStyle(1, 0xffffff);
-        this.add.text(800, startY + 210, this.truncateTeamName(finalMatch.team1 || 'TBD'), { fontSize: '12px', fill: final1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(800, startY + 210, this.truncateTeamName(finalMatch.team1 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: final1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
 
         // Team 2
         const final2Color = finalMatch.team2 === playerTeam ? 0xffff00 : (finalMatch.winner === finalMatch.team2 ? 0x00aa00 : (finalMatch.team2 !== 'TBD' ? 0x4488cc : 0x666666));
         this.add.rectangle(800, startY + 240, boxWidth, boxHeight, final2Color, 1).setStrokeStyle(1, 0xffffff);
-        this.add.text(800, startY + 240, this.truncateTeamName(finalMatch.team2 || 'TBD'), { fontSize: '12px', fill: final2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(800, startY + 240, this.truncateTeamName(finalMatch.team2 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: final2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
 
         // Winner
-        this.add.text(1000, 120, 'WINNER', { fontSize: '16px', fill: '#ffff00', fontStyle: 'bold' }).setOrigin(0.5);
+        this.add.text(1000, 126, 'WINNER', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
         const noWinnerYet = !finalMatch.winner;
         const winnerColor = finalMatch.winner === playerTeam ? 0xffff00 : (noWinnerYet ? 0xffcc00 : 0x00aa00);
         this.add.rectangle(1000, startY + 210, boxWidth, boxHeight, winnerColor, 1).setStrokeStyle(2, 0xffffff);
@@ -261,12 +270,13 @@ class TournamentBracketScene extends Phaser.Scene {
         if (noWinnerYet) {
             // No champion decided yet - show the trophy icon, or "TBD" as a fallback
             if (this.textures.exists('trophy-icon')) {
-                this.add.image(1000, startY + 210, 'trophy-icon').setScale(0.3);
+                // 0.18 keeps the 128px icon at 23px, inside the 26px box.
+                this.add.image(1000, startY + 210, 'trophy-icon').setScale(0.18);
             } else {
                 this.add.text(1000, startY + 210, 'TBD', { fontSize: '20px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
             }
         } else {
-            this.add.text(1000, startY + 210, this.truncateTeamName(finalMatch.winner), { fontSize: '12px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
+            this.add.text(1000, startY + 210, this.truncateTeamName(finalMatch.winner), { fontSize: UI.TYPE.small + 'px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
         }
     }
 
@@ -312,7 +322,7 @@ class TournamentBracketScene extends Phaser.Scene {
                             // Team box
                             this.add.rectangle(x, y, teamBoxWidth, teamBoxHeight, teamColor, 1).setStrokeStyle(1, 0xffffff);
                             this.add.text(x, y, this.truncateTeamName(team, 14), {
-                                fontSize: '11px',
+                                fontSize: UI.TYPE.micro + 'px',
                                 fill: '#000000',
                                 fontStyle: 'bold'
                             }).setOrigin(0.5);
@@ -332,6 +342,21 @@ class TournamentBracketScene extends Phaser.Scene {
             // Round of 16 and beyond: Show bracket like Qualifiers Cup
             this.drawBracket16();
         }
+    }
+
+    /** Width of a bracket box, so the player's accent bar can be aligned to it. */
+    boxW() { return 160; }
+
+    /* Marks which box is the player's own.
+     *
+     * The player's row was the only gold box in a column of identical blue ones,
+     * and it carried no label - so with a short team name it read as a rendering
+     * fault rather than as "this is you". Now it gets a white left accent bar and
+     * a YOUR TEAM caption above the column. */
+    drawPlayerMarker(x, y, boxH) {
+        const g = this.add.graphics();
+        g.fillStyle(0xffffff, 0.92);
+        g.fillRoundedRect(x - this.boxW() / 2 - 8, y - boxH / 2 + 2, 4, boxH - 4, 2);
     }
 
     truncateTeamName(name, maxLength = 15) {

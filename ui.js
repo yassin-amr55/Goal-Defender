@@ -16,8 +16,19 @@
     /* Single source of truth for the version string.
      *
      * This used to be hardcoded as 'V2.0' in MenuScene and was still saying
-     * V2.0 after v2.1 had shipped. Bump it here and every label follows. */
-    var VERSION = 'V2.1';
+     * V2.0 after v2.1 had shipped. Bump it here and every label follows.
+     *
+     * The only label in the game is the stamp in the bottom-right corner, which
+     * reads this constant - so this one line is the whole version bump. */
+    var VERSION = 'V2.2';
+
+    /* Centre of the top-right control cluster (the gear and mute icons).
+     *
+     * Exported so anything that has to line up with that cluster can derive the
+     * edge instead of hardcoding it. The account pill on the menu used to sit 17px
+     * short of the gear's right edge, which read as a misalignment because both
+     * are in the same corner. */
+    var TOP_RIGHT_X = 1236;
 
     /* ---------------- font ---------------- */
 
@@ -95,14 +106,30 @@
         var top = y - h / 2;
         var gloss = sheen === undefined ? 0.16 : sheen;
 
-        // Drop shadow underneath for depth
+        /* Drop shadow.
+         *
+         * Inset 2px horizontally as well as offset 5px down. At a full-width
+         * offset the shadow's rounded ends sat 5px proud of the body's own
+         * rounded ends, which showed as a small notch at the bottom corners of
+         * every pill-shaped chip - most visibly on the shop's money pill. */
+        /* The shadow's own radius is pulled in by 2px as well as its width.
+         * At a pill radius (h/2) an equal-radius shadow offset downward leaves its
+         * corner arc 5px proud of the body's, which reads as a notch at the
+         * bottom corners - most visible on the shop's money pill. */
         g.fillStyle(0x000000, 0.28);
-        g.fillRoundedRect(left, top + 5, w, h, radius);
+        g.fillRoundedRect(left + 2, top + 5, w - 4, h, Math.max(2, radius - 2));
 
-        // Body
-        g.fillStyle(fillBottom, 1);
-        g.fillRoundedRect(left, top, w, h, radius);
-        g.fillStyle(fillTop, 1);
+        /* Actual vertical gradient.
+         *
+         * This drew fillBottom as a full rect and then fillTop as a full rect on
+         * top of it, so the second completely covered the first and every panel
+         * and button in the game was FLAT despite being handed two colours. The
+         * darker colour was dead code.
+         *
+         * fillGradientStyle takes a colour per corner, so the top corners get
+         * fillTop and the bottom corners get fillBottom - a real top-to-bottom
+         * gradient, which is what gives the panels their sense of a lit surface. */
+        g.fillGradientStyle(fillTop, fillTop, fillBottom, fillBottom, 1);
         g.fillRoundedRect(left, top, w, h, radius);
 
         // Top sheen
@@ -175,10 +202,8 @@
         function paint(top, bottom, borderColor) {
             g.clear();
             g.fillStyle(0x000000, 0.28);
-            g.fillRoundedRect(-w / 2, -h / 2 + 5, w, h, radius);
-            g.fillStyle(bottom, 1);
-            g.fillRoundedRect(-w / 2, -h / 2, w, h, radius);
-            g.fillStyle(top, 1);
+            g.fillRoundedRect(-w / 2 + 2, -h / 2 + 5, w - 4, h, Math.max(2, radius - 2));
+            g.fillGradientStyle(top, top, bottom, bottom, 1);
             g.fillRoundedRect(-w / 2, -h / 2, w, h, radius);
             if (sheen > 0) {
                 // sheenRect clamps the radius to half the band height. Passing
@@ -330,7 +355,7 @@
     function topRight(scene, opts) {
         var o = opts || {};
         var y = o.y || 34;
-        var x = o.x || 1236;
+        var x = o.x || TOP_RIGHT_X;
         var r = o.radius || 26;
         var created = [];
 
@@ -377,15 +402,181 @@
         return created;
     }
 
+    /* ---------------- type scale ---------------- */
+
+    /* Twenty-six distinct font sizes were in use across the game, and the
+     * achievements page used three different ones inside a single card. That is
+     * the underlying cause of most of the "slightly off" feeling on every
+     * screen: nothing is anchored to a scale, so every value was a guess.
+     *
+     * These six steps replace ad-hoc sizes. Nothing below `small` may carry
+     * meaning, because a 10px font renders at roughly 5px on a small Android. */
+    var TYPE = {
+        micro: 12,   // version stamp, tertiary labels
+        small: 14,   // descriptions, ability copy, progress labels
+        body: 18,    // list rows, button labels
+        lead: 24,    // card names, stat values, tab labels
+        title: 36,   // screen titles
+        hero: 54     // menu title
+    };
+
+    /* ---------------- stadium background ---------------- */
+
+    /* The most jarring inconsistency in the game was three screens with no
+     * background at all: the bracket, the tournament result screen and the
+     * tutorial. They rendered as flat black voids while every other screen was a
+     * stadium, so a player moved stadium -> black -> stadium.
+     *
+     * This is now the only place the stadium is built. Every scene calls it. */
+    function stadium(scene, opts) {
+        var o = opts || {};
+        var groundHeight = o.groundHeight || 100;
+        var groundY = o.groundY || 720;
+        var groundTopY = groundY - groundHeight;
+
+        if (scene.textures.exists('background')) {
+            var bg = scene.add.image(640, 0, 'background');
+            bg.setOrigin(0.5, 0);
+            bg.setDisplaySize(1280, groundTopY);
+            bg.setAlpha(o.alpha !== undefined ? o.alpha : 0.6);
+        } else {
+            scene.cameras.main.setBackgroundColor(o.fallback || '#1a1a1a');
+        }
+
+        if (scene.textures.exists('ground')) {
+            var ground = scene.add.image(640, groundY, 'ground');
+            ground.setOrigin(0.5, 1);
+            ground.setDisplaySize(1280, groundHeight);
+            ground.setAlpha(o.groundAlpha !== undefined ? o.groundAlpha : 0.4);
+        }
+
+        if (scene.textures.exists('grass')) {
+            var grass = scene.add.image(640, groundTopY + 3, 'grass');
+            grass.setOrigin(0.5, 1);
+            grass.setDisplaySize(1280, grass.height);
+            grass.setAlpha(o.grassAlpha !== undefined ? o.grassAlpha : 0.3);
+        }
+
+        // Darken so foreground panels and text read clearly against the art.
+        if (o.dim !== undefined && o.dim > 0) {
+            scene.add.rectangle(640, 360, 1280, 720, 0x000000, o.dim);
+        }
+
+        return { groundTopY: groundTopY, groundY: groundY };
+    }
+
+    /* ---------------- screen title ---------------- */
+
+    /* Every screen title is the same two-layer treatment: a black copy offset a
+     * couple of pixels behind, then white with a gold stroke.
+     *
+     * Each scene used to rebuild this by hand and several drifted - the
+     * tournament result screen ended up as plain red with no stroke or shadow at
+     * all, which read as a different game. One function, one look. */
+    function title(scene, opts) {
+        var o = opts || {};
+        var text = o.text || '';
+        var x = o.x !== undefined ? o.x : 640;
+        var y = o.y !== undefined ? o.y : 82;
+        var size = o.size || TYPE.title;
+        var fill = o.fill || '#ffffff';
+        var stroke = o.stroke || '#f0a500';
+        var thickness = o.thickness !== undefined ? o.thickness : 6;
+        /* Kept at or below half the stroke so the shadow never escapes from
+         * behind the outline. At a 6px stroke an offset of 3 let it peek out
+         * around every round letterform. */
+        var offset = o.offset !== undefined ? o.offset : Math.max(1, Math.floor(thickness / 2) - 1);
+
+        /* Both layers live in a container and the CONTAINER is returned.
+         *
+         * Returning only the top text meant every "pulse the title" tween scaled
+         * one layer and left the other at its original size, so on a pulsing
+         * screen the shadow visibly detached and the word read as doubled and
+         * muddy. Handing back the container makes that impossible: a tween on the
+         * returned object moves the shadow with the text by construction. */
+        var holder = scene.add.container(x, y);
+
+        var shadow = scene.add.text(offset, offset, text, {
+            fontSize: size + 'px',
+            fontFamily: FAMILY,
+            fontStyle: '900',
+            color: '#000000',
+            alpha: 0.45
+        }).setOrigin(0.5);
+
+        var main = scene.add.text(0, 0, text, {
+            fontSize: size + 'px',
+            fontFamily: FAMILY,
+            fontStyle: '900',
+            color: fill,
+            stroke: stroke,
+            strokeThickness: thickness
+        }).setOrigin(0.5);
+
+        holder.add([shadow, main]);
+        holder.gdMain = main;
+        holder.gdShadow = shadow;
+        return holder;
+    }
+
+    /* ---------------- close button ---------------- */
+
+    /* One close control for the whole game.
+     *
+     * Four different patterns existed: an X inside the settings panel, BACK at
+     * bottom-left on some screens, BACK at bottom-centre on others, and nothing
+     * on the rest. The same action in three places in three positions.
+     *
+     * The settings version was the best of them - red, unambiguous, and inside
+     * the panel it belongs to - so it is what every sub-screen now uses. */
+    function closeButton(scene, opts) {
+        var o = opts || {};
+        var cx = o.x !== undefined ? o.x : 1004;
+        var cy = o.y !== undefined ? o.y : 164;
+        var r = o.r !== undefined ? o.r : 24;
+        var onClick = o.onClick || function () { scene.scene.start('MenuScene'); };
+
+        var g = scene.add.graphics();
+        g.setDepth(o.depth !== undefined ? o.depth : 60);
+
+        function paint(hover) {
+            g.clear();
+            g.fillStyle(hover ? 0xd6332c : 0xb3261e, 1);
+            g.fillCircle(cx, cy, r);
+            g.lineStyle(2, hover ? 0xff8a80 : 0xff5545, 1);
+            g.strokeCircle(cx, cy, r);
+            var arm = r * 0.44;
+            g.lineStyle(3.5, 0xffffff, 1);
+            g.beginPath();
+            g.moveTo(cx - arm, cy - arm); g.lineTo(cx + arm, cy + arm);
+            g.moveTo(cx + arm, cy - arm); g.lineTo(cx - arm, cy + arm);
+            g.strokePath();
+        }
+        paint(false);
+
+        var hit = scene.add.zone(cx, cy, r * 2 + 8, r * 2 + 8).setOrigin(0.5);
+        hit.setInteractive({ useHandCursor: true });
+        hit.on('pointerover', function () { paint(true); });
+        hit.on('pointerout', function () { paint(false); });
+        hit.on('pointerdown', onClick);
+
+        return { graphics: g, zone: hit };
+    }
+
     window.UI = {
         FAMILY: FAMILY,
         VERSION: VERSION,
+        TOP_RIGHT_X: TOP_RIGHT_X,
+        TYPE: TYPE,
         installFont: installFont,
         shade: shade,
         drawPanel: drawPanel,
         button: button,
         iconButton: iconButton,
         panel: panel,
-        topRight: topRight
+        topRight: topRight,
+        stadium: stadium,
+        title: title,
+        closeButton: closeButton
     };
 })();

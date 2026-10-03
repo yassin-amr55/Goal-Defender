@@ -32,17 +32,13 @@ class NamePromptScene extends Phaser.Scene {
 
         this.add.rectangle(cx, 360, 1280, 720, 0x000000, 0.6);
 
-        this.add.text(cx, 150, 'WELCOME', {
-            fontSize: '56px', color: '#000000', fontStyle: '900', alpha: 0.45
-        }).setOrigin(0.5);
-
-        this.add.text(cx, 146, 'WELCOME', {
-            fontSize: '56px', color: '#ffffff', fontStyle: '900',
-            stroke: '#f0a500', strokeThickness: 6
-        }).setOrigin(0.5);
+        UI.title(this, {
+            text: 'WELCOME', x: cx, y: 146,
+            size: UI.TYPE.hero + 2, fill: '#ffffff', stroke: '#f0a500'
+        });
 
         this.add.text(cx, 206, 'What should we call you?', {
-            fontSize: '24px', color: '#dfe8f0', fontStyle: '700'
+            fontSize: UI.TYPE.lead + 'px', color: '#dfe8f0', fontStyle: '700'
         }).setOrigin(0.5);
 
         UI.panel(this, {
@@ -51,16 +47,36 @@ class NamePromptScene extends Phaser.Scene {
             border: 0x4a6a8a, borderWidth: 2
         });
 
+        /* M7: the two text inputs in the game did not match.
+         *
+         * TournamentNameScene drew a bordered field with a gold ring and a lighter
+         * inner panel. This one was a bare dark rectangle with no border at all,
+         * so it looked disabled - and it is the FIRST interactive control a new
+         * player sees. Now it uses the same treatment: a visible rounded border,
+         * the same field colour, and a gold ring that appears on focus.
+         *
+         * The lighter inner rect the tournament field had was the artefact: it did
+         * not match any panel in the game and read as a rendering error. */
+        this.fieldFrame = this.add.graphics();
+        this.fieldFrame.fillStyle(0x0d1620, 1);
+        this.fieldFrame.fillRoundedRect(cx - 240, 288, 480, 68, 14);
+        this.fieldFrame.lineStyle(2, 0x4a6a8a, 1);
+        this.fieldFrame.strokeRoundedRect(cx - 240, 288, 480, 68, 14);
+
         this.field = this.add.text(cx, 322, this.initial, {
-            fontSize: '40px',
+            fontSize: UI.TYPE.hero - 14,
             color: '#ffffff',
             fontFamily: UI.FAMILY,
             fontStyle: '900',
-            backgroundColor: '#0d1620',
-            padding: { x: 24, y: 14 },
-            fixedWidth: 460,
+            fixedWidth: 440,
             align: 'center'
         }).setOrigin(0.5);
+
+        /* Gold focus ring, matching TournamentNameScene. */
+        this.focusRing = this.add.graphics();
+        this.focusRing.lineStyle(3, 0xf0b429, 1);
+        this.focusRing.strokeRoundedRect(cx - 240, 288, 480, 68, 14);
+        this.focusRing.setVisible(false);
 
         // The real DOM input is invisible and non-interactive, so on a phone a
         // tap never lands on it and no keyboard appears. Tapping this Phaser
@@ -70,7 +86,7 @@ class NamePromptScene extends Phaser.Scene {
         this.field.on('pointerdown', () => this.focusField());
 
         this.hint = this.add.text(cx, 396, '', {
-            fontSize: '16px', color: '#8fa6bd', fontStyle: '700'
+            fontSize: UI.TYPE.small + 'px', color: '#8fa6bd', fontStyle: '700'
         }).setOrigin(0.5);
 
         // Scratch text used only to measure how wide the typed name really is.
@@ -129,7 +145,7 @@ class NamePromptScene extends Phaser.Scene {
         UI.button(this, {
             x: cx, y: 500, w: 280, h: 68,
             label: 'PLAY',
-            textSize: 26,
+            textSize: UI.TYPE.lead,
             fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
             radius: 18,
             onClick: () => this.commit()
@@ -159,6 +175,8 @@ class NamePromptScene extends Phaser.Scene {
      * the programmatic focus leaves no caret behind. */
     focusField() {
         if (!this.domInput) return;
+        // M7: show the gold ring on focus, matching the tournament name field.
+        if (this.focusRing) this.focusRing.setVisible(true);
         try {
             this.domInput.focus({ preventScroll: true });
         } catch (e) {

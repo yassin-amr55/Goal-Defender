@@ -9,6 +9,11 @@ Naming note: this file is `update-plan.md`. Existing docs are `BETTER.md`,
 
 ## Part 1 — Trophy prizes (paid every win)
 
+> **SHIPPED (v2.1).** $500 Qualifiers / $10,000 Champions, paid on every cup win.
+> Verified: a Qualifiers win pays $500 and the victory screen shows the prize as a line
+> separate from match money.
+
+
 **New values**
 
 | Cup | Prize per win |
@@ -41,6 +46,11 @@ writes `tournamentQualifiersWinCount` / `tournamentChampionsWinCount`, and
 
 ## Part 2 — Tournament match rates
 
+> **SHIPPED (v2.1).** $5/score Qualifiers, $10/score Champions, tournaments only.
+> Verified in play: 21 taps -> score 21 -> exactly $105 gained ($5 x 21). Tutorial and
+> endless mode untouched at $3 per deflect.
+
+
 | Tournament | Rate | Was |
 |---|---|---|
 | Qualifiers | **$5 / score** | $3 |
@@ -62,6 +72,10 @@ unchanged.
 ---
 
 ## Part 3 — Champions score goals → 60 / 70 / 80 / 90 / 100
+
+> **SHIPPED (v2.1).** 60/70/80/90/100 per round. Verified the totals: a Champions
+> run is $4,000 match money + $10,000 prize, Qualifiers $700 + $500.
+
 
 **Where:** `getRequiredScore()` in `scenes/TournamentGameScene.js`
 
@@ -93,6 +107,10 @@ Qualifiers unchanged (20 / 30 / 40 / 50).
 
 ## Part 4 — Achievement revalues
 
+> **SHIPPED (v2.1).** `tourn_qual` $300, `tourn_champ` $5,000. All tournament
+> achievements already fired on first win only, as the plan predicted.
+
+
 | ID | Was | Becomes | Fires on |
 |---|---|---|---|
 | `tourn_qual` | $600 | **$300** | first Qualifiers win |
@@ -107,6 +125,14 @@ change.
 ---
 
 ## Part 4.2 — Global price & reward rebalance
+
+> **DONE, but not by this method.** The multiplier `k` was never chosen. The
+> ladder was rebalanced by hand instead, so the shape is deliberate rather than a
+> single proportional scale. Achievement pool is $12,265,420 and every price is
+> distinct and ascending.
+> **Known gap:** `balls_all` still says goal 13 while the shop sells 14 balls, so it
+> cannot be claimed. See Part 9.
+
 
 **Goal:** raise all 13 ball prices and cut all 30 achievement rewards by the
 **same proportional rate**, so the economy keeps its shape.
@@ -145,6 +171,11 @@ The multiplier `k` is **not chosen**. Pick before implementing.
 
 ## Part 5 — Player name
 
+> **SHIPPED (v2.1).** Name prompt on first launch, editable in Settings while
+> signed out, and owned by the account once signed in. Note the storage key is
+> `gdPlayerName`, not `playerName` as this plan guessed.
+
+
 - **First launch** (no `playerName` key): prompt for a name before the menu.
   Default **`PLAYER`**.
 - Max ~14 characters, sanitised, stored as `playerName`.
@@ -156,6 +187,15 @@ Needed before Part 6 — the leaderboard ranks by name.
 ---
 
 ## Part 6 — Leaderboard
+
+> **SHIPPED (v2.1).** Firebase, anonymous auth, two tabs, scrollable.
+> The plan predicted the real risk here and it happened twice: the first
+> implementation gave one person two identities (anonymous uid + account uid), so
+> the board published duplicates and renames never reached it. Fixed by publishing
+> under the account uid.
+> 
+> **Added since:** your own row shows `YOU` instead of your name, with a green tint.
+
 
 ### UI
 
@@ -209,6 +249,16 @@ Client scores are self-reported. Mitigations:
 
 ## Part 7 — Launch v2.1
 
+> **SHIPPED.** Launched to itch. The itch zip is rebuilt from an explicit
+> allow-list and verified byte-identical to the repo before every upload.
+> 
+> **Still outstanding, and it matters:** the `v2.1` git tag points at `795f13f`,
+> which predates three fix commits — most importantly the account data-loss fix
+> (`d813d54`). Anyone checking out the `v2.1` tag gets the code *before* a bug that
+> could permanently destroy cloud progress. Tag was deliberately left in place on
+> request; the safest fix is a `v2.2` tag rather than moving `v2.1`.
+
+
 1. Implement Parts 1–6 (and 4.2) with `node --check` on every `.js`
 2. Verify all scenes boot clean
 3. Tag `v2.1`, push to GitHub
@@ -222,6 +272,21 @@ Parts 1–4 need no network and can ship ahead of the leaderboard.
 ---
 
 ## Part 8 — Optional login / signup
+
+> **SHIPPED, and hardened well past this plan.** Username + password,
+> optional, saves progress across devices.
+> 
+> This part is where almost every serious bug lived: a failed cloud read used to
+> overwrite real progress with a guessed `"player"` stub; anonymous visitors each
+> created a junk account document; a failed rename consumed the 7-day cooldown;
+> and a stale `save.size() <= 20` cap in the rules would have denied every account
+> write once the synced key list grew to 26 — breaking accounts for exactly the
+> players who had played most.
+> 
+> Verified end to end against live Firebase with a real email/password signup:
+> account created, signed out, device wiped, signed back in, progress restored
+> byte for byte.
+
 
 **Username + password only**, and **optional** — the game must remain fully
 playable with no account. Purpose is **saving progress across devices**.
@@ -255,6 +320,73 @@ Caution: 300% speed boost compounds to **~19× real speed** (pre-existing,
 deliberately untouched). Successive speed-boost balls will hit that ceiling
 fast — balance against diminishing real returns, not displayed percentage.
 
+### Two broken achievements to fix before adding any
+
+Both were found while writing this section and are **live right now** — they
+are in the shipped build and can never be claimed.
+
+1. **`balls_all` goal is 13, the shop sells 14.** The shop grew a ball and the
+   achievement did not. Raise the goal to 14.
+2. **`spd_210` is unreachable.** It needs `maxSpeedBoost = 210`, which only
+   Spark grants — and **Spark is not in `ballData`**. It has a texture, a
+   `getBallTexture` entry, a `loadBallAbilities` case, and its PNG is on disk.
+   It was simply never added to the shop, so it cannot be bought or equipped.
+   Spark is a finished ball that never shipped; adding one line to `ballData`
+   makes an existing, unreachable achievement reachable.
+
+### Where the price ladder has room
+
+```
+0 · 150 · 900 · 3600 · 4500 · 6000 · 10000 · 14500 · 15000
+  · 15750 · 24500 · 50000 · 100000 ················· 1500000
+                                        ^^^^^^^^^^^^^
+                                        15x gap (F-23, declined)
+```
+
+Real room sits between $24,500 and $100,000, and immediately above $100,000.
+Most proposals below target those, so the ladder gains shape instead of
+stretching.
+
+### New balls — no new mechanics required
+
+These use the eleven ability fields that already exist and are already read.
+Lowest risk: each is one `case` plus one shop line.
+
+| # | Name | Price | Ability | Field | Note |
+|---|---|---|---|---|---|
+| 1 | **Spark Ball** | $1,800 | Max speed boost tops out at 210% | `maxSpeedBoost = 210` | **Already built.** Un-ships a dead achievement. |
+| 2 | **Boulder Ball** | $900 | Hitbox shrinks 30% slower | `hitboxShrinkMultiplier = 0.7` | Fills the $900–$3,600 gap |
+| 3 | **Drift Ball** | $30,000 | Ball moves 30% slower | `speedMultiplier = 0.7` | Gentler than Anchor, much cheaper |
+| 4 | **Quicksilver Ball** | $75,000 | Ball moves 70% slower, min hitbox 115% | `speedMultiplier` + `minHitboxMultiplier` | Slow *and* forgiving — the Void archetype without the brutal start |
+| 5 | **Sprung Ball** | $13,000 | Bounces 60% higher | `jumpMultiplier = 1.6` | Rubber's slot, one tier up. Watch the roof: Rubber clears it by 35px, so 1.6 would clip (see 9.2.1) |
+| 6 | **Chained Ball** | $200,000 | Hitbox never starts shrinking | `hitboxShrinkMultiplier = 0` | Hitbox is a flat 100% all run. Costs nothing but reads as a downgrade — needs to be *clearly* the payoff |
+
+### New balls — require a new field
+
+Each needs one new field, one assignment, and one read site. All are cheap, but
+none are free.
+
+| # | Name | Price | Ability | New field | How |
+|---|---|---|---|---|---|
+| 7 | **Wall Ball** | $20,000 | +1 score per **wall** bounce | `wallScore` | `onWallHit()` already exists and does nothing |
+| 8 | **Magnet Ball** | $35,000 | Every wall bounce adds +2% speed | `wallBoostStep` | Feeds the existing `speedBoost` |
+| 9 | **Rally Ball** | $65,000 | Each deflect in the same run scores +1 more (resets when you miss) | `rallyBonus` | Increment in `onBallClick`, reset on game over |
+| 10 | **Tightrope Ball** | $120,000 | Hitbox starts at maximum | `startHitboxMax` | Inverse of Void: big target that still shrinks fast |
+| 11 | **Heavy Ball** | $180,000 | Ball falls 40% faster, so it returns to your side sooner | `gravityMultiplier` | `setGravityY(500)` is a single call site |
+| 12 | **Focus Ball** | $90,000 | Clicking within 20px of centre counts as a **Perfect** for +5 score | `perfectRadius`, `perfectScore` | Needs a distance check in the existing hit test |
+| 13 | **Clockwork Ball** | $45,000 | 3 seconds after your last click, the ball slows to a crawl | `idleSlowdown` | A timer reset inside `onBallClick` |
+| 14 | **Bulwark Ball** | $150,000 | Saves you **twice** instead of once | `revivesLeft = 2` | No new field — just a value |
+| 15 | **Ember Ball** | $5,200 | Hitbox shrinks 65% slower **but** max speed boost caps at 220% | both | A real trade-off rather than a straight upgrade |
+
+### Balls I would not add
+
+- **Anything that raises `jumpMultiplier` much past 1.5** — the roof clamp at
+  `maxBallHeight` silently eats the gain. Measured clearance for Rubber is 35px.
+- **A second pure speed-boost ball** — Neon already takes +8%/hit and the 300%
+  ceiling compounds to ~19× real speed. Diminishing returns are already steep.
+- **Anything that touches the middle-line rule.** It is the game's core skill
+  expression; loosening it removes the difficulty rather than adding a choice.
+
 ---
 
 ## Part 9.2 — Launch v2.2
@@ -280,6 +412,97 @@ relative to the rebalanced scale, not the original one.
 
 Carries forward from v2.1: the "not using the screenshot column" note if theme
 layout changed, and any Part 4.2 price/reward values as shipped in v2.1.
+
+### New achievements
+
+30 ship today across 7 categories, and they are almost all **cumulative totals**
+(deflections, score, speed, money). Nine of the 30 measure the same number the
+player already watches, so the list goes quiet after the first hour. The gap is
+achievements about **how** you played, not **how much**.
+
+The proposals below lean on things the game already tracks or already emits but
+never turned into a metric. The cheapest wins are marked — those need no new
+counter at all.
+
+#### Zero new counters — the existing `METRICS` already cover these
+
+| id | Name | Requirement | Goal | Reward |
+|---|---|---|---|---|
+| `defl_250` | Quarter Century | Deflect 250 balls | 250 | $400 |
+| `defl_2500` | Twenty-Five Hundred | Deflect 2,500 balls | 2500 | $12,000 |
+| `score_500` | Five Hundred | Score 500 in one run | 500 | $120,000 |
+| `score_1000` | Four Figures, One Run | Score 1,000 in one run | 1000 | $400,000 |
+| `speed_150` | Three-Quarter Speed | Reach a 150% speed boost | 150 | $400 |
+| `tourn_final` | Qualifiers Finalist | Reach the Qualifiers final | 1 | $1,200 |
+| `tourn_played_10` | Regular | Play 10 tournaments | 10 | $5,000 |
+| `money_10000` | Five Figures | Hold $10,000 at once | 10000 | $2,000 |
+| `balls_5` / `balls_10` | Collector / Serious Collector | Own 5 / 10 balls | 5 / 10 | $250 / $2,500 |
+| `balls_all` **fix** | Collector | Own every ball | **14** | $6,000 |
+
+`balls_all` is a **fix, not an addition** — see 9.2.1.
+
+#### Cheap — one counter, already available in the scene
+
+| id | Name | Requirement | New counter | Reward |
+|---|---|---|---|---|
+| `wall_100` | Brick Wall | 100 wall bounces | `wallHits` in `onWallHit` | $600 |
+| `wall_5000` | Demolition | 5,000 wall bounces | same | $20,000 |
+| `rally_25` | Unbroken | 25 deflections in one run without missing | `runDeflections` (already exists!) | $900 |
+| `rally_100` | Century Rally | 100 deflections in one run | same | $30,000 |
+| `rally_500` | Unbreakable | 500 deflections in one run | same | $250,000 |
+| `perfect_50` | Surgeon | 50 perfect hits (within 20px of centre) | `perfectHits` | $1,500 |
+
+`rally_*` is the strongest of these: `runDeflections` is **already tracked** and
+simply not used as a metric. It is also the most interesting — it measures
+*consistency* rather than lifetime volume, which nothing currently does.
+
+#### Medium — new counters, but no new gameplay code
+
+| id | Name | Requirement | New counter | Reward |
+|---|---|---|---|---|
+| `acc_90` | Surgeon General | Finish a run with 90% of deflections as perfect hits | per-run accuracy | $5,000 |
+| `nohit_1k` | Clean Sheet | Score 1,000 without missing a single ball | already implied | $80,000 |
+| `fast_10` | Reflex | 10 perfect hits in a single run | per-run perfects | $4,000 |
+| `tourn_5` | Five and Out | Win 5 cups | `tournamentWins` | $15,000 |
+| `played_mobile` | On the Go | Complete a run on a phone | layout.js already knows | $150 |
+| `first_blood` | First Ever | Your first deflect | 1 | $10 |
+
+#### Expensive — need per-ball or per-run history
+
+These are the most interesting ideas and the most work, because they need a
+**map** of state rather than a single number. Worth doing as a set or not at
+all.
+
+| id | Name | Requirement | Needs |
+|---|---|---|---|
+| `ball_<id>_5` × 14 | *Ball* Novice | Score 5+ with a specific ball | `bestByBall` map, one entry per ball |
+| `ball_<id>_50` × 14 | *Ball* Expert | Score 50+ with that ball | same |
+| `master_all` | True Collector | Score 25+ with **every** ball | same |
+| `gauntlet_10` | Gauntlet Regular | Score 10 with the $1.5M ball | same |
+| `no_revive_win` | Clean Victory | Win a Qualifiers match without using Revive Ball | per-match flag |
+
+14 balls × 2 tiers = 28 achievements from one map. That single addition would
+more than double the list and give every purchase a purpose beyond the stat it
+changes — which is the main thing the current 30 fail to do.
+
+#### Categories I would add
+
+Current: Deflections, Speed, Score, Tournament, Collection, General.
+
+- **Mastery** — rallies, accuracy, perfect hits. Measures *skill*.
+- **Per-Ball** — one pair per ball, plus the all-balls capstone.
+- **Trophy Room** — Qualifiers and Champions tracked separately, cup runs, finals.
+- **Career** — time played, runs finished, account milestones.
+
+#### Anti-patterns to avoid
+
+- **Anything keyed to wall-clock time** ("play at 3am"). Punishes players in
+  other timezones and on schedules, and cannot be verified offline.
+- **Anything that requires spending money** ("own a $150,000 ball") — that is
+  the shop's job, and it reads as a paywall.
+- **Anything that fires on a failure.** Losers should not be congratulated.
+- **More Deflections/Score steps.** There are already 9 and 5 of them. The next
+  step from 100,000 deflections is a number no human reaches, so it is filler.
 
 ---
 
@@ -385,7 +608,7 @@ Endless mode only, by design. Every description maps to a field that is read:
 | Steel | $900 | moves 10% slower | `speedMultiplier` |
 | Rubber | $3,600 | bounces higher | `jumpMultiplier` |
 | Ice | $4,500 | hitbox shrinks 50% slower | `hitboxShrinkMultiplier` |
-| Anchor | $6,000 | moves 50% slower | `speedMultiplier` |
+| Anchor | $6,000 | speed increases 50% slower — half base speed **and** half the boost rate | `speedMultiplier`, `boostStepMain`, `boostStepLate` |
 | Revive | $10,000 | saves you once | `revivesLeft` |
 | Fire | $14,500 | +2 score per deflect | `scoreMultiplier` |
 | Neon | $15,000 | speed boost +8% per hit | `boostStepMain` |
@@ -556,6 +779,11 @@ anything is pushed.
 
 ## Known bugs found while planning (not yet fixed)
 
+- **Two shipped achievements cannot be claimed.** `balls_all` has goal 13 while
+  the shop sells 14 balls, and `spd_210` requires a 210% speed cap that only
+  Spark Ball grants — and Spark is absent from `ballData`, so it cannot be bought.
+  Spark is otherwise complete (texture, texture map, ability case, PNG on disk),
+  so both bugs are fixed by one shop line and one number. See Part 9.
 - **`TEST-RESULTS.md` F-07 and F-27 are wrong and must not be actioned.**
   They report the Rubber Ball's `jumpMultiplier` as assigned-but-never-read and
   its shop description as a false promise. Measured in play, the ball bounces

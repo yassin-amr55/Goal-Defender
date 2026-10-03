@@ -64,26 +64,44 @@
         this.middleLine.setOrigin(0, 0);
         this.middleLine.setDepth(5);
 
-        // PHASE 5: Timer to shrink hitbox every 20 seconds
-        this.time.addEvent({
-            delay: 20000, // 20 seconds
-            callback: this.shrinkHitbox,
-            callbackScope: this,
-            loop: true
-        });
+        /* PHASE 5: Timer to shrink hitbox every 20 seconds.
+         *
+         * Skipped entirely for the Inverted Ball, whose hitbox is pinned. Not
+         * starting the timer is enough - shrinkHitbox() is left untouched, so
+         * every other ball keeps the single code path. */
+        if (!this.fixedHitbox) {
+            this.time.addEvent({
+                delay: 20000, // 20 seconds
+                callback: this.shrinkHitbox,
+                callbackScope: this,
+                loop: true
+            });
+        } else {
+            this.hitboxRadius = this.fixedHitbox;
+            this.hitboxCircle.setRadius(this.hitboxRadius);
+            this.shrinkCountdown = -1;   // no countdown: the size never changes
+        }
 
-        // PHASE 5: Countdown timer (updates every second)
-        this.time.addEvent({
-            delay: 1000, // 1 second
-            callback: () => {
-                this.shrinkCountdown--;
-                if (this.shrinkCountdown <= 0) {
-                    this.shrinkCountdown = 20; // Reset to 20
-                }
-            },
-            callbackScope: this,
-            loop: true
-        });
+        /* PHASE 5: Countdown timer (updates every second).
+         *
+         * Also skipped for a fixed hitbox. The countdown exists to warn that
+         * the target is about to shrink, so for the Inverted Ball it warns
+         * about something that never happens: it counted down past zero, then
+         * reset to 20, and the HUD displayed a nonsense countdown for the whole
+         * run while the hitbox sat unchanged. */
+        if (!this.fixedHitbox) {
+            this.time.addEvent({
+                delay: 1000, // 1 second
+                callback: () => {
+                    this.shrinkCountdown--;
+                    if (this.shrinkCountdown <= 0) {
+                        this.shrinkCountdown = 20; // Reset to 20
+                    }
+                },
+                callbackScope: this,
+                loop: true
+            });
+        }
 
 
         // PHASE 4 & 5: Add global click handler to check distance from ball
@@ -121,15 +139,24 @@
 
             const r = this.hitboxRadius;
 
+            /* Closest the tap came to the ball's centre, in either place we are
+             * willing to accept the hit. The Focus Ball judges "perfect" on
+             * this distance, so it has to be measured across BOTH candidates -
+             * judging only the current position would miss a perfect that the
+             * history window legitimately allowed. */
+            let bestDist = Phaser.Math.Distance.Between(
+                pointer.x, pointer.y, this.ball.x, this.ball.y);
+
             // 1) Where the ball is now
-            let hit = Phaser.Math.Distance.Between(
-                pointer.x, pointer.y, this.ball.x, this.ball.y) <= r;
+            let hit = bestDist <= r;
 
             // 2) Where it has just been
             if (!hit) {
                 for (let i = this.ballHistory.length - 1; i >= 0; i--) {
                     const h = this.ballHistory[i];
-                    if (Phaser.Math.Distance.Between(pointer.x, pointer.y, h.x, h.y) <= r) {
+                    const d = Phaser.Math.Distance.Between(pointer.x, pointer.y, h.x, h.y);
+                    if (d < bestDist) bestDist = d;
+                    if (d <= r) {
                         hit = true;
                         break;
                     }
@@ -141,7 +168,7 @@
             // Lock before deflecting so a second tap arriving in the same
             // frame is dropped. Released once the ball heads back right.
             this.deflectLock = true;
-            this.onBallClick();
+            this.onBallClick(bestDist);
         });
 
         // Place the goal sprite on the left (directly on top of ground)
@@ -184,7 +211,11 @@
 
             // PHASE 12: Add ball trail at higher speed (will be visible when speed increases)
             this.ballTrail = null; // clear any reference from a previous run
-            if (!window.Settings || window.Settings.isOn('gdParticles')) {
+            /* The trail has its own setting. It emits a particle every few frames
+             * for the whole run, which makes it the expensive effect on a slow
+             * phone - the deflect explosion is one burst. Sharing a toggle with
+             * the explosion meant turning the trail off also cost you that. */
+            if (!window.Settings || window.Settings.isOn('gdBallTrail')) {
                 this.ballTrail = this.add.particles(0, 0, finalTexture, {
                     speed: 50,
                     scale: { start: 0.15, end: 0 },
@@ -269,10 +300,33 @@
         this.runDeflections = 0;
         this.lifetimeDeflections = parseInt(localStorage.getItem('goalDefenderDeflections') || '0', 10);
 
-        // HUD: three independent readouts, no backing panel. Each keeps a dark
-        // stroke so it stays readable over the stadium art.
-        this.scoreText = this.add.text(22, 22, 'Score: 0', {
-            fontSize: '32px',
+        /* Perfect hits (Focus Ball) and the best single run.
+         *
+         * The lifetime and best-run values are separate on purpose: "10 perfect
+         * hits in one run" is a different achievement from "10 perfect hits
+         * ever", and the same is true of deflections. Read from storage rather
+         * than assumed 0 so a returning player keeps their record. */
+        this.runPerfects = 0;
+        this.lifetimePerfects = parseInt(localStorage.getItem('goalDefenderPerfectHits') || '0', 10);
+        this.bestRunDeflections = parseInt(localStorage.getItem('goalDefenderBestRunDeflections') || '0', 10);
+        this.bestRunPerfects = parseInt(localStorage.getItem('goalDefenderBestRunPerfects') || '0', 10);
+
+        /* S8: the three HUD readouts sat directly on the stadium with no backing,
+         * in three different colours - white, gold, and green. Green is this
+         * game's "active/on" colour for every toggle, so a "Speed Boost: 0%"
+         * readout in green read as an enabled switch rather than a value.
+         *
+         * They now sit on a soft scrim and share one label colour and one value
+         * colour, so the three lines read as a single panel of numbers. The
+         * values stay coloured where the colour MEANS something (the hitbox
+         * warning goes gold, the perfect counter goes green) but the neutral
+         * readouts do not. */
+        this.hudScrim = this.add.graphics();
+        this.hudScrim.fillStyle(0x0b1220, 0.42);
+        this.hudScrim.fillRoundedRect(10, 10, 330, 116, 12);
+
+        this.scoreText = this.add.text(24, 28, 'Score: 0', {
+            fontSize: UI.TYPE.lead + 'px',
             color: '#ffffff',
             fontStyle: '900',
             stroke: '#000000',
@@ -280,8 +334,8 @@
         });
 
         // Add countdown text for hitbox shrinking
-        this.countdownText = this.add.text(22, 64, 'Hitbox shrinks in: 10s', {
-            fontSize: '24px',
+        this.countdownText = this.add.text(24, 68, 'Hitbox shrinks in: 10s', {
+            fontSize: UI.TYPE.body + 'px',
             color: '#ffd45e',
             fontStyle: '800',
             stroke: '#000000',
@@ -290,9 +344,9 @@
 
         // Add speed boost text
         this.speedBoost = 0; // Track total speed boost percentage
-        this.speedText = this.add.text(22, 98, 'Speed Boost: 0%', {
-            fontSize: '24px',
-            color: '#3ddc6b',
+        this.speedText = this.add.text(24, 104, 'Speed Boost: 0%', {
+            fontSize: UI.TYPE.body + 'px',
+            color: '#e6eef7',
             fontStyle: '800',
             stroke: '#000000',
             strokeThickness: 3
@@ -339,16 +393,47 @@
         this.boostStepMain = 1.04;
         this.boostStepLate = 1.02;
         this.startHitboxMin = false; // Start with the hitbox already minimum
-        // Money paid per deflect, and how many missed balls the ball can save.
-        this.scoreRate = 3;
+        // How many missed balls the ball can save.
         this.revivesLeft = 0;
+
+        /* New abilities.
+         *
+         * Each defaults to OFF so every ball that does not set it behaves
+         * exactly as before. Getting this wrong is how a "cosmetic" ball ends
+         * up secretly changing the payout. */
+        // Hitbox pinned to a fixed size instead of shrinking (Inverted).
+        this.fixedHitbox = 0;
+        // Dead-centre taps award bonus score (Focus).
+        this.perfectRadius = 0;
+        this.perfectScore = 0;
+        // Money grows with each deflect instead of paying a flat rate (Rally).
+        // The Nth deflect pays N dollars.
+        this.rallyMoney = false;
+        this.rallyEarned = 0;
+        // Perfect hits in the CURRENT run, for achievements.
+        this.runPerfects = 0;
 
         switch(this.equippedBall) {
             case 'golden':
                 this.hitboxShrinkMultiplier = 0.85; // Shrinks 15% slower
                 break;
             case 'steel':
-                this.speedMultiplier = 0.9; // 10% slower
+                /* 10% slower, on both levers - the same shape as Anchor at a
+                 * tenth of the strength.
+                 *
+                 * Anchor's label promises "speed increases 50% slower", which
+                 * is only true because the boost step was halved as well as
+                 * the base speed. Steel gets the identical treatment scaled
+                 * down: base 10% slower, and the boost climbs 10% slower.
+                 * boostStepMain 1.04 -> 1.036 (+3.6% per hit, not +4%).
+                 *
+                 * At 0.036 the step is rounded, so the percentage no longer
+                 * lands on tidy multiples of 4 - that is why the HUD shows
+                 * numbers like 36% and 72%. It is still monotonic and still
+                 * reaches the 300% ceiling, just with 10% more taps. */
+                this.speedMultiplier = 0.9;
+                this.boostStepMain = 1.036;
+                this.boostStepLate = 1.018;
                 break;
             case 'fire':
                 this.scoreMultiplier = 2; // +2 score per deflect
@@ -366,9 +451,24 @@
                 this.hitboxShrinkMultiplier = 0.5; // Shrinks 50% slower
                 break;
             case 'anchor':
-                // Base speed is half, so the same boost percentage takes much
-                // longer to build in real time. The 300% ceiling is unchanged.
+                /* Half speed, and the speed builds at half rate.
+                 *
+                 * Two separate levers, both at 50%:
+                 *   speedMultiplier 0.5 - half the base speed, so every speed in
+                 *     the run is half the default's (150 vs 300 at the start,
+                 *     441 vs 883 at 110% boost). Because the boost MULTIPLIES the
+                 *     base rather than adding to it, this halves the peak too.
+                 *   boostStep halved - the boost climbs per TAP, so halving the
+                 *     step means twice as many taps to reach any given
+                 *     percentage: 40% at 10 taps becomes 20%, and 110% at 30
+                 *     taps becomes roughly 55%.
+                 *
+                 * The 300% ceiling is unchanged, so the ball can still reach
+                 * top speed - it just takes about twice the taps, which is what
+                 * the shop copy promises. */
                 this.speedMultiplier = 0.5;
+                this.boostStepMain = 1.02;   // +2% per hit instead of +4%
+                this.boostStepLate = 1.01;   // +1% past 100% instead of +2%
                 break;
             case 'neon':
                 this.boostStepMain = 1.08; // +8% per hit
@@ -378,11 +478,17 @@
                 this.scoreMultiplier = 3; // +3 score per deflect
                 break;
             case 'void':
-                // Brutal from the first hit, but the ball never gets quick.
-                // Starts at the minimum hitbox with no room to shrink, so the
-                // 150% ceiling is what makes it survivable at all.
+                /* Brutal from the first hit, but the ball never gets quick.
+                 *
+                 * Starts at the minimum hitbox with no room to shrink, so the
+                 * ceiling is what makes it survivable at all. That ceiling was
+                 * raised from 150% to 170%: at 150% the ball spent so long at
+                 * its slowest that the run had no shape - you were tapping a
+                 * crawling ball into a shrinking target. 170% still ends far
+                 * below the default 300%, so the trade is intact, but the
+                 * middle of the run now has some pace to it. */
                 this.startHitboxMin = true;
-                this.maxSpeedBoost = 150;
+                this.maxSpeedBoost = 170;
                 this.boostStepMain = 1.02;
                 this.boostStepLate = 1.01;
                 break;
@@ -393,14 +499,97 @@
                 this.scoreMultiplier = 5; // +5 score per deflect
                 break;
             case 'money':
-                // Pays more per deflect. scoreRate is read by GameOverScene.
-                this.scoreRate = 5; // $5 per deflect instead of $3
+                /* Pays $5 per deflect instead of $3.
+                 *
+                 * There used to be a scoreRate field set here for this, and a
+                 * comment claiming GameOverScene read it. Nothing ever did -
+                 * GameOverScene works out the rate from the equipped ball id
+                 * directly. The field was assigned in two scenes, read in none,
+                 * and looked enough like the real wiring that editing it would
+                 * have compiled, passed review, and done nothing. Deleted; the
+                 * Money Ball is wired entirely by the one line in
+                 * GameOverScene that switches on equippedBall. */
                 break;
             case 'revive':
                 // One free mistake. Set directly rather than via a
                 // startRevives field, because a property left over from a
                 // previous run would leak the free revive into other balls.
                 this.revivesLeft = 1;
+                break;
+
+            /* ---- added balls ---- */
+
+            case 'life':
+                /* Revive Ball with a bigger budget: three saves, not one.
+                 *
+                 * Costs three times as much, and a save is worth roughly a
+                 * third of a run, so it is deliberately not simply "three times
+                 * better" - it is a run-ender rather than a small rescue. */
+                this.revivesLeft = 3;
+                break;
+
+            case 'sprung':
+                /* 60% higher off the ground.
+                 *
+                 * The roof clamp at maxBallHeight throws away any bounce above
+                 * it, so the realised height is less than 60% more. Measured
+                 * headroom for the 25% Rubber Ball was 35px, which is why this
+                 * stops at 1.6 rather than going higher. */
+                this.jumpMultiplier = 1.6;
+                break;
+
+            case 'spark':
+                /* Caps the speed boost at 210% instead of 300%.
+                 *
+                 * This ball existed as code, a texture and an asset for the
+                 * whole of v2.1 and was never in the shop, so nobody could buy
+                 * it and the achievement that needs a 210% cap was unreachable.
+                 * Adding the shop line is the whole fix. */
+                this.maxSpeedBoost = 210;
+                break;
+
+            case 'inverted':
+                /* Two things pinned to the same number.
+                 *
+                 * The hitbox never shrinks, so it stays at a fixed 150% of the
+                 * ball for the whole run - the target never gets harder. The
+                 * speed is also capped at 150%, which means it never gets fast
+                 * either. Neither is a buff on its own: an unshrinkable hitbox
+                 * alone would be strictly easier than the default, but pairing
+                 * it with a hard speed ceiling removes the skill ceiling too,
+                 * so the run is long and safe rather than escalating. */
+                this.fixedHitbox = 150;
+                this.minHitboxMultiplier = 1.5;
+                this.maxSpeedBoost = 150;
+                break;
+
+            case 'focus':
+                /* A tap within 20px of the ball's centre is a Perfect and pays
+                 * 5 bonus score on top of the normal deflect score.
+                 *
+                 * Judged on the closest the tap came to the centre, across both
+                 * the ball's current position and its recent history - using the
+                 * history matters because on a phone a tap routinely lands after
+                 * the ball has moved, and a "perfect" that requires frame-exact
+                 * timing would be near-impossible on a touchscreen. */
+                this.perfectRadius = 20;
+                this.perfectScore = 5;
+                break;
+
+            case 'rally':
+                /* Money climbs with the deflect count: the 1st tap pays $1, the
+                 * 2nd $2, and the 50th pays $50. So a run is worth the
+                 * TRIANGULAR number of its deflections, not a flat rate.
+                 *
+                 * Deliberately based on DEFLECTIONS, not score - the Money Ball
+                 * already pays per deflect, and a score-based version would
+                 * compound with Fire and Candy and become the only ball worth
+                 * buying. This one is flat in score, so it is a pure money pick.
+                 *
+                 * 50 deflects is a good run and pays $1,275, versus $150 on the
+                 * default ball. That gap is why it costs $65,000. */
+                this.rallyMoney = true;
+                this.rallyEarned = 0;
                 break;
         }
 
@@ -458,7 +647,12 @@
             'void': 'ball_void',
             'gauntlet': 'ball_gauntlet',
             'money': 'ball_money',
-            'revive': 'ball_revive'
+            'revive': 'ball_revive',
+'inverted': 'ball_inverted',
+'focus': 'ball_focus',
+'rally': 'ball_rally',
+'life': 'ball_life',
+'sprung': 'ball_sprung',
         };
         return textureMap[this.equippedBall] || 'ball_default';
     }
@@ -574,12 +768,18 @@
         this.cameras.main.once('camerafadeoutcomplete', () => {
             this.scene.start('GameOverScene', {
                 score: this.score,
-                deflections: this.runDeflections
+                deflections: this.runDeflections,
+                /* Handed to the results screen so it can pay the Rally Ball's
+                 * escalating total. Not re-read from localStorage there: this
+                 * value belongs to THIS run, and reading the key would pick up
+                 * whatever the last run happened to save. */
+                rallyEarned: this.rallyEarned,
+                perfects: this.runPerfects
             });
         });
     }
 
-    onBallClick() {
+    onBallClick(tapDistance) {
         // PHASE 4: Click-to-deflect mechanic with upward curve
         if (this.ball) {
 
@@ -620,7 +820,25 @@
             this.ball.setVelocity(horizontalSpeed, upwardSpeed);
 
             // Add score (affected by ball ability)
-            const scoreGain = Math.round(this.scoreMultiplier);
+            let scoreGain = Math.round(this.scoreMultiplier);
+
+            /* Focus Ball: a dead-centre tap pays bonus score.
+             *
+             * Judged on the distance handed in by the hit test, which is the
+             * closest the tap came to the ball across its current position AND
+             * its recent history. A tap with no recorded distance (a scripted
+             * call with no argument) cannot be perfect, so it just deflects. */
+            let perfect = false;
+            if (this.perfectRadius > 0 &&
+                typeof tapDistance === 'number' &&
+                tapDistance <= this.perfectRadius) {
+                perfect = true;
+                scoreGain += this.perfectScore;
+                this.runPerfects++;
+                this.lifetimePerfects++;
+                localStorage.setItem('goalDefenderPerfectHits', this.lifetimePerfects);
+            }
+
             this.score += scoreGain;
 
             // Deflections are 1 per successful click, tracked separately so
@@ -628,6 +846,46 @@
             this.runDeflections++;
             this.lifetimeDeflections++;
             localStorage.setItem('goalDefenderDeflections', this.lifetimeDeflections);
+
+            /* Rally Ball: the Nth deflect of the run pays N dollars.
+             *
+             * Incremented AFTER counting the deflect, so the first tap pays $1
+             * as promised rather than $0. Accumulated here and handed to the
+             * results screen, because the payout happens there. */
+            if (this.rallyMoney) {
+                this.rallyEarned += this.runDeflections;
+            }
+
+            /* Say so when a Focus Ball tap lands dead centre.
+             *
+             * Without feedback a Perfect is invisible: the score jumps by 5
+             * instead of 1 and a player who was not aiming for the centre has
+             * no idea the ball is doing anything. */
+            if (perfect) {
+                const t = this.add.text(this.ball.x, this.ball.y - 40, 'PERFECT +' + this.perfectScore, {
+                    fontSize: '30px', color: '#3ddc6b', fontStyle: '900',
+                    stroke: '#000000', strokeThickness: 5
+                }).setOrigin(0.5).setDepth(50);
+                this.tweens.add({
+                    targets: t, y: t.y - 50, alpha: 0,
+                    duration: 700, ease: 'Quad.easeOut',
+                    onComplete: () => t.destroy()
+                });
+            }
+
+            /* Best single run, for the deflect-in-one-run achievements.
+             *
+             * Only ever moves up. A new key rather than reusing the lifetime
+             * total, because "deflect 100 in a single run" and "deflect 100 in
+             * total" are different achievements. */
+            if (this.runDeflections > this.bestRunDeflections) {
+                this.bestRunDeflections = this.runDeflections;
+                localStorage.setItem('goalDefenderBestRunDeflections', String(this.bestRunDeflections));
+            }
+            if (this.runPerfects > this.bestRunPerfects) {
+                this.bestRunPerfects = this.runPerfects;
+                localStorage.setItem('goalDefenderBestRunPerfects', String(this.bestRunPerfects));
+            }
 
             this.scoreText.setText('Score: ' + this.score);
             this.speedText.setText('Speed Boost: ' + this.speedBoost + '%');
@@ -744,19 +1002,39 @@
 
         this.pauseMenuElements = [];
 
+        /* B8: a full-height vertical line was visible straight through the pause
+         * card, including across the panel itself.
+         *
+         * It is middleLine - the red guide at x=640 marking the half of the field
+         * you can hit on. At depth 5 it is correctly behind the 78%-alpha overlay,
+         * but 22% transparency is enough to show a red line clearly, and it read
+         * as a compositing seam rather than as a game element.
+         *
+         * Fixed by hiding the guide outright while paused rather than by making
+         * the overlay opaque - the frozen ball and goal stay visible, which is
+         * what a player actually wants to check when they pause. */
+        if (this.middleLine) this.middleLine.setVisible(false);
+
         // Dim the whole screen
-        const overlay = this.add.rectangle(640, 360, 1280, 720, 0x050a12, 0.78);
+        const overlay = this.add.rectangle(640, 360, 1280, 720, 0x050a12, 0.84);
         overlay.setDepth(200);
         this.pauseMenuElements.push(overlay);
 
+        /* M9: the card was 380 tall spanning 170..550, while its content only ran
+         * from the title at 236 to the bottom of MAIN MENU at 471. The lower 79px
+         * of the panel was empty, so it read as a wall rather than a dialog.
+         *
+         * Content is now title 214..266, CONTINUE 285..355, MAIN MENU 365..435, so
+         * the card is 284 tall spanning 182..466 - roughly 32px of padding top and
+         * bottom, which is what makes it look like a dialog. */
         const card = UI.panel(this, {
-            x: 640, y: 360, w: 480, h: 380, radius: 24,
+            x: 640, y: 324, w: 480, h: 284, radius: 24,
             fillTop: 0x1f2c3d, fillBottom: 0x121c28,
             border: 0x4a6a8a, borderWidth: 2, depth: 201
         });
         this.pauseMenuElements.push(card);
 
-        const title = this.add.text(640, 236, 'PAUSED', {
+        const title = this.add.text(640, 240, 'PAUSED', {
             fontSize: '52px',
             color: '#ffffff',
             fontStyle: '900',
@@ -766,9 +1044,9 @@
         this.pauseMenuElements.push(title);
 
         const cont = UI.button(this, {
-            x: 640, y: 340, w: 300, h: 74,
+            x: 640, y: 320, w: 300, h: 70,
             label: 'CONTINUE',
-            textSize: 26,
+            textSize: UI.TYPE.lead,
             fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
             depth: 202,
             onClick: () => this.resumeGame()
@@ -776,9 +1054,9 @@
         this.pauseMenuElements.push(cont);
 
         const menu = UI.button(this, {
-            x: 640, y: 434, w: 300, h: 74,
+            x: 640, y: 400, w: 300, h: 70,
             label: 'MAIN MENU',
-            textSize: 26,
+            textSize: UI.TYPE.lead,
             fillTop: 0xffb340, fillBottom: 0xf08a1d,
             depth: 202,
             onClick: () => this.scene.start('MenuScene')
@@ -792,6 +1070,9 @@
     resumeGame() {
         this.isPaused = false;
         this.physics.resume();
+
+        // Restore the hit-zone guide hidden by pauseGame().
+        if (this.middleLine) this.middleLine.setVisible(true);
 
         // Remove pause menu elements (UI.button returns a Container, and
         // destroy() on a Container removes its children too)
@@ -822,7 +1103,12 @@
 
         // Update countdown text
         if (this.countdownText) {
-            if (this.hitboxRadius <= this.minHitboxRadius) {
+            if (this.fixedHitbox) {
+                /* The Inverted Ball's hitbox never changes, so there is nothing
+                 * to count down. Say that plainly instead of showing a
+                 * countdown to a shrink that will never happen. */
+                this.countdownText.setText('Hitbox: FIXED 150%');
+            } else if (this.hitboxRadius <= this.minHitboxRadius) {
                 this.countdownText.setText('Hitbox: MIN SIZE');
             } else {
                 this.countdownText.setText('Hitbox shrinks in: ' + this.shrinkCountdown + 's');

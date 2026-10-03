@@ -24,20 +24,11 @@
         }
 
         // Title
-        this.add.text(640, 66, 'SHOP', {
-            fontSize: '58px',
-            color: '#000000',
-            fontStyle: '900',
-            alpha: 0.45
-        }).setOrigin(0.5);
-
-        this.add.text(640, 62, 'SHOP', {
-            fontSize: '58px',
-            color: '#ffffff',
-            fontStyle: '900',
-            stroke: '#f0a500',
-            strokeThickness: 7
-        }).setOrigin(0.5);
+        UI.title(this, {
+            text: 'SHOP', x: 640, y: 62,
+            size: UI.TYPE.hero + 4, fill: '#ffffff',
+            stroke: '#f0a500', thickness: 7
+        });
 
         // Get player money
         this.playerMoney = parseInt(localStorage.getItem('goalDefenderMoney') || 0, 10);
@@ -50,7 +41,7 @@
         });
 
         this.moneyText = this.add.text(170, 62, '$' + Achievements.fmt(this.playerMoney), {
-            fontSize: '27px',
+            fontSize: UI.TYPE.lead + 'px',
             color: '#ffd45e',
             fontStyle: '900'
         }).setOrigin(0.5);
@@ -62,52 +53,93 @@
         this.ownedBalls = JSON.parse(localStorage.getItem('goalDefenderOwnedBalls') || '["default"]');
         this.equippedBall = localStorage.getItem('goalDefenderEquippedBall') || 'default';
 
-        // PHASE 10: Define ball data - kept sorted by price, cheapest first
+        /* PHASE 10: Define ball data - kept sorted by price, cheapest first.
+         *
+         * The order matters: the shop renders this array in sequence, so a
+         * price ladder out of order would show a cheap ball after an expensive
+         * one and read as a pricing mistake. 20 balls, cheapest to dearest.
+         *
+         * `balls_all` in achievements.js counts owned balls and its goal has to
+         * equal this length - it was left at 13 when the shop grew, which made
+         * the achievement impossible to claim. */
         this.ballData = [
-            { id: 'default', name: 'Default Ball', price: 0, ability: 'None', texture: 'ball_default' },
+            { id: 'default', name: 'Default Ball', price: 0, ability: 'Standard ball', texture: 'ball_default' },
             { id: 'golden', name: 'Golden Ball', price: 150, ability: 'Hitbox shrinks 15% slower', texture: 'ball_golden' },
-            { id: 'steel', name: 'Steel Ball', price: 900, ability: 'Ball moves 10% slower', texture: 'ball_steel' },
+            { id: 'steel', name: 'Steel Ball', price: 900, ability: 'Speed increases 10% slower', texture: 'ball_steel' },
             { id: 'rubber', name: 'Rubber Ball', price: 3600, ability: 'Bounces 25% higher', texture: 'ball_rubber' },
             { id: 'ice', name: 'Ice Ball', price: 4500, ability: 'Hitbox shrinks 50% slower', texture: 'ball_ice' },
-            { id: 'anchor', name: 'Anchor Ball', price: 6000, ability: 'Ball moves 50% slower', texture: 'ball_anchor' },
+            { id: 'anchor', name: 'Anchor Ball', price: 6000, ability: 'Speed increases 50% slower', texture: 'ball_anchor' },
             { id: 'revive', name: 'Revive Ball', price: 10000, ability: 'Saves you once - bounce off the goal', texture: 'ball_revive' },
             { id: 'fire', name: 'Fire Ball', price: 14500, ability: '+2 score per deflect', texture: 'ball_fire' },
             { id: 'neon', name: 'Neon Ball', price: 15000, ability: 'Speed boost +8% per hit', texture: 'ball_neon' },
+            { id: 'sprung', name: 'Sprung Ball', price: 15250, ability: 'Bounces 60% higher', texture: 'ball_sprung' },
             { id: 'ghost', name: 'Ghost Ball', price: 15750, ability: 'Min hitbox 130% of ball', texture: 'ball_ghost' },
-            { id: 'money', name: 'Money Ball', price: 24500, ability: 'Earns $5 per score instead of $3', texture: 'ball_money' },
+            { id: 'money', name: 'Money Ball', price: 24500, ability: 'Earns $5 per deflect instead of $3', texture: 'ball_money' },
+            { id: 'spark', name: 'Spark Ball', price: 30000, ability: 'Max speed boost 210%', texture: 'ball_spark' },
             { id: 'candy', name: 'Candy Ball', price: 50000, ability: '+3 score per deflect', texture: 'ball_candy' },
-            { id: 'void', name: 'Void Ball', price: 100000, ability: 'Hitbox starts min, max speed 150%', texture: 'ball_void' },
+            { id: 'life', name: 'Life Ball', price: 60000, ability: 'Saves you three times', texture: 'ball_life' },
+            { id: 'rally', name: 'Rally Ball', price: 65000, ability: 'Each deflect earns $1 more than the last', texture: 'ball_rally' },
+            { id: 'focus', name: 'Focus Ball', price: 90000, ability: 'Dead-centre taps are Perfect: +5 score', texture: 'ball_focus' },
+            { id: 'void', name: 'Void Ball', price: 100000, ability: 'Hitbox starts min, max speed 170%', texture: 'ball_void' },
+            { id: 'inverted', name: 'Inverted Ball', price: 500000, ability: 'Hitbox stays 150%, max speed stays 150%', texture: 'ball_inverted' },
             { id: 'gauntlet', name: 'Gauntlet Ball', price: 1500000, ability: 'Hitbox 170%, max speed 130%, +5 score', texture: 'ball_gauntlet' }
         ];
 
-        // Back + page navigation. Created before the grid, because renderPage()
-        // sets the enabled/disabled state of PREV and NEXT.
-        UI.button(this, {
-            x: 140, y: 662, w: 180, h: 58,
-            label: 'BACK',
-            textSize: 24,
-            fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
-            radius: 16,
+        /* Guard the two things that have silently broken before.
+         *
+         * 1. Full Rack in achievements.js counts owned balls against a constant
+         *    that was left at 13 while the shop sold 14, making the achievement
+         *    impossible to claim. If a ball is added here without bumping
+         *    BALL_COUNT, Full Rack quietly becomes unreachable again - so say
+         *    so loudly at startup instead of at the end of a release.
+         *
+         * 2. The shop renders this array in order, so an unsorted price ladder
+         *    reads as a pricing mistake to the player. */
+        if (window.Achievements && typeof window.Achievements.ballCount === 'function') {
+            var expected = window.Achievements.ballCount();
+            if (expected !== this.ballData.length) {
+                console.error('Ball count mismatch: shop has ' + this.ballData.length +
+                    ' but achievements.js BALL_COUNT is ' + expected +
+                    ' - Full Rack will be unreachable. Update BALL_COUNT.');
+            }
+        }
+        for (let i = 1; i < this.ballData.length; i++) {
+            if (this.ballData[i].price < this.ballData[i - 1].price) {
+                console.error('ballData is not sorted by price at index ' + i +
+                    ' (' + this.ballData[i].id + ').');
+                break;
+            }
+        }
+
+        /* Close + page navigation. Created before the grid, because renderPage()
+         * sets the enabled/disabled state of PREV and NEXT.
+         *
+         * M2: the shared red X replaces a bottom-left BACK, so closing sits in the
+         * same place on every sub-screen. That also frees the bottom bar, which
+         * is now just PREV / PAGE / NEXT centred - one alignment instead of a
+         * BACK floating on the left next to a centred pager. */
+        UI.closeButton(this, {
+            x: 1240, y: 40, r: 22,
             onClick: () => this.scene.start('MenuScene')
         });
 
         this.prevBtn = UI.button(this, {
             x: 470, y: 662, w: 130, h: 58,
             label: 'PREV',
-            textSize: 20,
+            textSize: UI.TYPE.body,
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59,
             radius: 16,
             onClick: () => this.changePage(-1)
         });
 
         this.pageLabel = this.add.text(640, 662, '', {
-            fontSize: '18px', color: '#9fb3c8', fontStyle: '800'
+            fontSize: UI.TYPE.small + 'px', color: '#9fb3c8', fontStyle: '800'
         }).setOrigin(0.5);
 
         this.nextBtn = UI.button(this, {
             x: 810, y: 662, w: 130, h: 58,
             label: 'NEXT',
-            textSize: 20,
+            textSize: UI.TYPE.body,
             fillTop: 0x4a90c4, fillBottom: 0x2f6b9c,
             radius: 16,
             onClick: () => this.changePage(1)
@@ -192,29 +224,35 @@
             border: 0x3d5a73, borderWidth: 2
         }));
 
-        // Ball icon
+        /* Card is y-125..y+125. The ball art was centred at y-74 at 0.19 scale
+         * - 97px tall, so it reached y-122 and its bottom edge landed exactly on
+         * the name text with zero gap. Every card looked cramped at the top.
+         * Now 0.15 at y-78, leaving ~15px of air above the name. */
         if (this.textures.exists(ball.texture)) {
-            const icon = this.add.image(x, y - 74, ball.texture);
-            icon.setScale(0.19);
+            const icon = this.add.image(x, y - 78, ball.texture);
+            icon.setScale(0.15);
             box.add(icon);
         }
 
-        box.add(this.add.text(x, y - 26, ball.name, {
-            fontSize: '20px',
+        box.add(this.add.text(x, y - 24, ball.name, {
+            fontSize: UI.TYPE.lead + 'px',
             color: '#ffffff',
             fontStyle: '800'
         }).setOrigin(0.5));
 
+        /* 12px -> 14px. This line is the reason to buy one ball over another - it
+         * is the single most decision-relevant string in the shop and it was the
+         * smallest text on the card. At 10px it would be ~5px on a small phone. */
         box.add(this.add.text(x, y + 2, ball.ability, {
-            fontSize: '12px',
+            fontSize: UI.TYPE.small + 'px',
             color: '#9fb3c8',
             fontStyle: '600',
             wordWrap: { width: 236 },
             align: 'center'
         }).setOrigin(0.5));
 
-        box.add(this.add.text(x, y + 44, '$' + Achievements.fmt(ball.price), {
-            fontSize: '22px',
+        box.add(this.add.text(x, y + 42, '$' + Achievements.fmt(ball.price), {
+            fontSize: UI.TYPE.lead + 'px',
             color: '#ffd45e',
             fontStyle: '900'
         }).setOrigin(0.5));
@@ -222,12 +260,23 @@
         const isOwned = this.ownedBalls.includes(ball.id);
         const isEquipped = this.equippedBall === ball.id;
 
-        let buttonText = 'BUY  $' + Achievements.fmt(ball.price);
+        /* M8: the price was printed twice on every card - once in gold above the
+         * button and again inside the button label ("$150" then "BUY $150"). The
+         * price line stays, because that is where the eye lands; the button now
+         * says only what it does.
+         *
+         * S12: EQUIPPED was grey with a lighter grey fill, which reads as
+         * disabled or as a loading state. Being equipped is a SUCCESS state, so
+         * it is gold with dark text - distinct from BUY green and EQUIP blue,
+         * and matching the gold the game already uses for "this is the one". */
+        let buttonText = 'BUY';
         let fillTop = 0x3ddc6b, fillBottom = 0x17a34a;
+        let textColor = 0xffffff;
 
         if (isEquipped) {
             buttonText = 'EQUIPPED';
-            fillTop = 0x3c4a5a; fillBottom = 0x2a3644;
+            fillTop = 0xf0b429; fillBottom = 0xc98a08;
+            textColor = 0x1a1a1a;
         } else if (isOwned) {
             buttonText = 'EQUIP';
             fillTop = 0x4aa3e8; fillBottom = 0x2170b0;
@@ -236,7 +285,8 @@
         box.add(UI.button(this, {
             x: x, y: y + 86, w: 172, h: 46,
             label: buttonText,
-            textSize: 16,
+            textSize: UI.TYPE.body,
+            textColor: textColor,
             fillTop: fillTop, fillBottom: fillBottom,
             radius: 12,
             onClick: isEquipped ? null : () => this.handleBallPurchase(ball)

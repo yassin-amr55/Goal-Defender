@@ -36,27 +36,11 @@
         }
 
         // Title: "TOURNAMENT MODE" at (640, 100)
-        this.add.text(642, 102, 'TOURNAMENT MODE', {
-            fontSize: '64px',
-            fill: '#000000',
-            fontStyle: 'bold',
-            alpha: 0.5
-        }).setOrigin(0.5);
-
-        const title = this.add.text(640, 100, 'TOURNAMENT MODE', {
-            fontSize: '64px',
-            fill: '#ffcc00',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 6,
-            shadow: {
-                offsetX: 3,
-                offsetY: 3,
-                color: '#000000',
-                blur: 5,
-                fill: true
-            }
-        }).setOrigin(0.5);
+        const title = UI.title(this, {
+            text: 'TOURNAMENT MODE', x: 640, y: 96,
+            size: UI.TYPE.hero + 8, fill: '#ffcc00',
+            stroke: '#000000', thickness: 6, offset: 3
+        });
 
         // Glow/pulse effect on title
         this.tweens.add({
@@ -90,7 +74,11 @@
 
         // TROPHIES button
         UI.button(this, {
-            x: 1160, y: 56, w: 150, h: 56,
+            /* Was x=1160 with w=150, so its right edge sat at 1235. The mute
+             * icon from UI.topRight() is centred at 1236 and is about 32px wide,
+             * spanning 1220 to 1252 - a 15px overlap. The two controls were
+             * literally touching in the corner. */ 
+            x: 1102, y: 56, w: 150, h: 56,
             label: 'TROPHIES',
             textSize: 18,
             fillTop: 0xf0b429, fillBottom: 0xc98a08,
@@ -143,7 +131,7 @@
     createTournamentCard(x, y, title, displayTitle, description, difficulty, isUnlocked, mode, scene) {
         // Rounded card, 380x420
         UI.panel(this, {
-            x: x, y: y, w: 380, h: 420, radius: 22,
+            x: x, y: y, w: 380, h: 370, radius: 22,
             fillTop: isUnlocked ? 0x22334a : 0x1b2430,
             fillBottom: isUnlocked ? 0x141f2c : 0x111820,
             border: isUnlocked ? 0x4a90c4 : 0x3d4b59,
@@ -155,24 +143,24 @@
         let trophyImage = null;
 
         if (this.textures.exists(trophyKey)) {
-            trophyImage = this.add.image(x, y - 116, trophyKey);
-            trophyImage.setScale(0.3);
+            trophyImage = this.add.image(x, y - 102, trophyKey);
+            trophyImage.setScale(0.24);
         } else if (this.textures.exists('trophy-icon')) {
-            trophyImage = this.add.image(x, y - 116, 'trophy-icon');
-            trophyImage.setScale(0.5);
+            trophyImage = this.add.image(x, y - 102, 'trophy-icon');
+            trophyImage.setScale(0.42);
         }
         if (trophyImage && !isUnlocked) trophyImage.setAlpha(0.35).setTint(0x8899aa);
 
         // Title
-        this.add.text(x, y - 34, displayTitle, {
-            fontSize: '27px',
+        this.add.text(x, y - 8, displayTitle, {
+            fontSize: UI.TYPE.lead + 'px',
             color: '#ffffff',
             fontStyle: '900'
         }).setOrigin(0.5);
 
         // Description
-        this.add.text(x, y + 2, description, {
-            fontSize: '17px',
+        this.add.text(x, y + 26, description, {
+            fontSize: UI.TYPE.small + 'px',
             color: '#9fb3c8',
             fontStyle: '700'
         }).setOrigin(0.5);
@@ -184,20 +172,27 @@
          * cup was playable, the PLAY button lit - was still told "Win the
          * Qualifiers Cup to unlock". It read as a bug and made players doubt a
          * unlock they had earned. The line now states the actual state. */
-        if (mode === 'champions') {
-            this.add.text(x, y + 32,
-                isUnlocked ? 'Unlocked' : 'Win the Qualifiers Cup to unlock', {
-                    fontSize: '13px',
-                    color: isUnlocked ? '#7f8c99' : '#ff8a8a',
-                    fontStyle: '700'
-                }).setOrigin(0.5);
+        /* Only drawn when the cup is UNLOCKED.
+         *
+         * This line used to be drawn either way, with the wording changing to
+         * 'Win the Qualifiers Cup to unlock' when locked. But the locked block
+         * below already draws its own requirement at y + 36 - four pixels away,
+         * at a similar size. The two messages rendered on top of each other and
+         * read as a single line with a strikethrough through it, which is the
+         * one piece of text explaining why the cup is locked. */
+        if (mode === 'champions' && isUnlocked) {
+            this.add.text(x, y + 52, 'Unlocked', {
+                fontSize: UI.TYPE.small + 'px',
+                color: '#7f8c99',
+                fontStyle: '700'
+            }).setOrigin(0.5);
         }
 
         // PLAY button
         UI.button(this, {
-            x: x, y: y + 148, w: 210, h: 64,
+            x: x, y: y + 132, w: 210, h: 62,
             label: 'PLAY',
-            textSize: 26,
+            textSize: UI.TYPE.lead,
             fillTop: isUnlocked ? 0x3ddc6b : 0x3c4a5a,
             fillBottom: isUnlocked ? 0x17a34a : 0x2a3644,
             radius: 16,
@@ -220,24 +215,35 @@
         // Lock overlay if not unlocked
         if (!isUnlocked) {
             // Dim the card
-            const lockOverlay = this.add.rectangle(x, y, 380, 420, 0x050a12, 0.55);
+            const lockOverlay = this.add.rectangle(x, y, 380, 370, 0x050a12, 0.55);
 
-            // Lock icon
+            /* Lock badge on a dark disc, centred exactly where the trophy art
+             * sits.
+             *
+             * The lock used to float at y - 60, which landed inside the trophy's
+             * own bounds (the art spans roughly y - 193 to y - 39). Half the lock
+             * was over the cup and half over the card, so it read as a smudge
+             * rather than as "this trophy is locked". A disc behind it makes the
+             * intent unambiguous and the card looks designed rather than
+             * accidentally dimmed. */
+            const badgeY = y - 102;
+            const badge = this.add.circle(x, badgeY, 40, 0x050a12, 0.72);
+            badge.setStrokeStyle(2, 0x5c6b7d, 0.9);
             if (this.textures.exists('lock-icon')) {
-                const lockIcon = this.add.image(x, y - 60, 'lock-icon');
-                lockIcon.setScale(0.5);
-                lockIcon.setAlpha(0.85);
+                const lockIcon = this.add.image(x, badgeY, 'lock-icon');
+                lockIcon.setScale(0.4);
+                lockIcon.setAlpha(0.95);
             }
 
             // Unlock text
-            this.add.text(x, y + 6, 'LOCKED', {
-                fontSize: '22px',
+            this.add.text(x, y + 52, 'LOCKED', {
+                fontSize: UI.TYPE.lead + 'px',
                 color: '#ff8a8a',
                 fontStyle: '900'
             }).setOrigin(0.5);
 
-            this.add.text(x, y + 36, 'Win the Qualifiers Cup first', {
-                fontSize: '14px',
+            this.add.text(x, y + 84, 'Win the Qualifiers Cup first', {
+                fontSize: UI.TYPE.small + 'px',
                 color: '#c9a0a0',
                 fontStyle: '700'
             }).setOrigin(0.5);

@@ -132,9 +132,15 @@ class AccountScene extends Phaser.Scene {
             align: 'center', wordWrap: { width: 660 }
         }).setOrigin(0.5);
 
+        /* M2: shared red X instead of a bottom-centre BACK. */
+        UI.closeButton(this, {
+            x: 1240, y: 40, r: 22,
+            onClick: () => this.close()
+        });
+
         UI.button(this, {
             x: cx, y: 666, w: 190, h: 52,
-            label: 'BACK', textSize: 20,
+            label: 'BACK', textSize: UI.TYPE.body,
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59, radius: 14,
             onClick: () => this.close()
         });
@@ -455,23 +461,37 @@ class AccountScene extends Phaser.Scene {
 
         this.subtitle.setText('Signed in as ' + (A.username() || 'player'));
 
+        /* Totals are DERIVED, never written down.
+         *
+         * This said "1 of 14" balls and "14 of 30" achievements as string
+         * literals, while the shop sold 20 balls and the achievements page
+         * counted 39. The account page is where a player checks their progress,
+         * so a wrong total there contradicts the Shop and the Achievements page
+         * in the same session - it made the Shop look broken and understated the
+         * whole collection by a third.
+         *
+         * Both figures now come from the modules that own them, so adding a ball
+         * or an achievement updates this page for free. */
+        const achTotal = window.Achievements ? window.Achievements.total() : 0;
+        const ballTotal = window.Achievements ? window.Achievements.ballCount() : 0;
+
         const rows = [
             ['HIGH SCORE', fmt(st.highScore)],
             ['LIFETIME DEFLECTIONS', fmt(st.deflections)],
             ['TROPHIES', String(st.trophies)],
             ['TOURNAMENTS WON', String(st.tournamentsWon)],
             ['MONEY', '$' + fmt(st.money)],
-            ['BALLS OWNED', st.ownedBalls.length + ' of 14'],
-            ['ACHIEVEMENTS', st.achievementsClaimed + ' of 30 claimed']
+            ['BALLS OWNED', st.ownedBalls.length + ' of ' + ballTotal],
+            ['ACHIEVEMENTS', st.achievementsClaimed + ' of ' + achTotal + ' claimed']
         ];
 
         rows.forEach((r, i) => {
             const y = 232 + i * 36;
             this.own(this.add.text(360, y, r[0], {
-                fontSize: '17px', color: '#8fa6bd', fontStyle: '700'
+                fontSize: UI.TYPE.small + 'px', color: '#8fa6bd', fontStyle: '700'
             }).setOrigin(0, 0.5));
             this.own(this.add.text(920, y, r[1], {
-                fontSize: '17px', color: '#ffffff', fontStyle: '800'
+                fontSize: UI.TYPE.body + 'px', color: '#ffffff', fontStyle: '800'
             }).setOrigin(1, 0.5));
             this.own(this.add.rectangle(640, y, 560, 1, 0xffffff, 0.08));
         });
