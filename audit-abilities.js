@@ -12,6 +12,13 @@ const fs = require('fs');
 const R = f => fs.readFileSync(f, 'utf8');
 const game = R('scenes/GameScene.js');
 const tour = R('scenes/TournamentGameScene.js');
+const shop = R('scenes/ShopScene.js');
+
+let fail = 0;
+function ok(name, cond) {
+    if (!cond) fail++;
+    console.log((cond ? '  ok   ' : '  FAIL ') + name);
+}
 
 /* Return the body of a function whose signature starts at `sig`, by counting
  * braces from the opening one. */
@@ -76,7 +83,6 @@ console.log('\nDEAD abilities: ' + dead.length + (dead.length ? ' -> ' + dead.ma
 
 /* ---- shop description vs a field that is genuinely read ---- */
 console.log('\n--- shop description vs live field ---');
-const shop = R('scenes/ShopScene.js');
 const byId = {};
 const ballRe = /\{\s*id:\s*'([^']+)',\s*name:\s*'([^']+)',\s*price:\s*(\d+),\s*ability:\s*'([^']*)'/g;
 let m;
@@ -90,7 +96,7 @@ const CLAIMS = [
     { re: /bounces (\d+)% higher/, field: 'jumpMultiplier' },
     { re: /Min hitbox (\d+)%/, field: 'minHitboxMultiplier' },
     { re: /max speed (\d+)%/, field: 'maxSpeedBoost' },
-    { re: /Speed boost \+(\d+)% per hit/, field: 'boostStepMain' },
+    { re: /Speed boost \+([\d.]+)% per hit/, field: 'boostStepMain' },
     { re: /\+(\d+) score per deflect/, field: 'scoreMultiplier' },
     { re: /earns \$(\d+) per score/, field: 'scoreRate' },
     { re: /Saves you once/, field: 'revivesLeft' },
@@ -115,6 +121,60 @@ for (const id of Object.keys(byId)) {
     if (!live.length) unwired.push(b.name);
 }
 console.log('\nballs promising an unwired effect: ' + (unwired.length ? unwired.join(', ') : 'none'));
+
+/* ---- the number in the shop copy must equal the number in the code ----
+ *
+ * Above only proves a ball's copy names a field that is genuinely read. It never
+ * compared the VALUE, so a ball could advertise "+2% per hit" while the loader
+ * set 1.04 and nothing would notice. That is exactly the failure that shipped on
+ * Anchor and Steel: both genuinely halve or nearly-halve the per-hit boost, but
+ * the cards read "Speed increases 50% slower" and "Speed increases 10% slower",
+ * which are statements about BASE speed and say nothing about the boost at all.
+ *
+ * For every ball whose copy states a per-hit boost, read the real
+ * boostStepMain out of loadBallAbilities() and compare. */
+console.log('\n--- advertised boost vs boostStepMain ---');
+
+/* boostStepMain for one ball: its own case block, else the default. */
+function boostStepFor(id) {
+    const at = loader.indexOf("case '" + id + "':");
+    if (at === -1) return 1.04;                       // not overridden = default
+    const next = loader.indexOf("case '", at + 1);
+    const block = loader.slice(at, next === -1 ? loader.length : next);
+    const m = block.match(/this\.boostStepMain\s*=\s*([\d.]+)/);
+    return m ? parseFloat(m[1]) : 1.04;
+}
+
+const pct = v => Math.round((v - 1) * 1000) / 10;    // 1.036 -> 3.6
+const mismatched = [];
+
+for (const id of Object.keys(byId)) {
+    const m = byId[id].ability.match(/Speed boost \+([\d.]+)% per hit/);
+    if (!m) continue;
+    const advertised = parseFloat(m[1]);
+    const actual = pct(boostStepFor(id));
+    const good = Math.abs(advertised - actual) < 0.001;
+    console.log('  ' + byId[id].name.padEnd(14) +
+        ('+' + advertised + '%').padEnd(8) +
+        'code +' + actual + '%   ' + (good ? 'match' : '*** MISMATCH ***'));
+    if (!good) mismatched.push(byId[id].name);
+}
+
+console.log('\ncopy/code boost mismatches: ' + (mismatched.length ? mismatched.join(', ') : 'none'));
+
+/* The two balls this started from must both advertise the boost outright rather
+ * than describing base speed with a double negative. */
+ok('Anchor advertises its boost per hit, not "N% slower"',
+    /id: 'anchor'[^}]*ability: 'Speed boost \+2% per hit/.test(shop));
+ok('Steel advertises its boost per hit, not "N% slower"',
+    /id: 'steel'[^}]*ability: 'Speed boost \+3\.6% per hit/.test(shop));
+ok('Anchor costs $20,000',
+    /id: 'anchor'[^}]*price: 20000/.test(shop));
+
+if (fail || mismatched.length) {
+    console.log('\n' + (fail + mismatched.length) + ' FAILED');
+    process.exitCode = 1;
+}
 
 /* ---- tournament parity ---- */
 console.log('\n--- tournament parity ---');

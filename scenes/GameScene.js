@@ -420,11 +420,16 @@
                 /* 10% slower, on both levers - the same shape as Anchor at a
                  * tenth of the strength.
                  *
-                 * Anchor's label promises "speed increases 50% slower", which
-                 * is only true because the boost step was halved as well as
-                 * the base speed. Steel gets the identical treatment scaled
-                 * down: base 10% slower, and the boost climbs 10% slower.
-                 * boostStepMain 1.04 -> 1.036 (+3.6% per hit, not +4%).
+                 * "10% slower" is a statement about the base speed, and the shop
+                 * used to print exactly that: "Speed increases 10% slower", which
+                 * never told you the boost was reduced too. It is now
+                 * "Speed boost +3.6% per hit, base speed 90%".
+                 *
+                 * The conversion from one to the other: the default step is +4%
+                 * per hit, and 10% off that is 4 x 0.9 = 3.6%. So
+                 * boostStepMain 1.04 -> 1.036, which is what this has always set
+                 * - the mechanic was already right and only the copy was
+                 * misleading.
                  *
                  * At 0.036 the step is rounded, so the percentage no longer
                  * lands on tidy multiples of 4 - that is why the HUD shows
@@ -463,8 +468,24 @@
                  *     taps becomes roughly 55%.
                  *
                  * The 300% ceiling is unchanged, so the ball can still reach
-                 * top speed - it just takes about twice the taps, which is what
-                 * the shop copy promises. */
+                 * top speed - it just takes about twice the taps.
+                 *
+                 * ON THE SHOP TEXT. This has always been +2% per hit, never the
+                 * default +4% - boostStepMain below is 1.02 and has been all
+                 * along. The copy is what was wrong: it read "Speed increases
+                 * 50% slower", a double negative that never mentioned the boost,
+                 * whose "50%" also collided visually with Ice Ball's "Hitbox
+                 * shrinks 50% slower" three rows above it. A player reading that
+                 * had no way to tell what the ball actually did.
+                 *
+                 * It now reads "Speed boost +2% per hit, half base speed", which
+                 * states both levers as numbers. audit-abilities.js cross-checks
+                 * that stated +2% against this assignment, so the copy cannot
+                 * drift from the code again.
+                 *
+                 * The price went from $6,000 to $20,000 for the same reason the
+                 * copy did: half speed for the whole run is a large, permanent
+                 * difficulty cut, and $6,000 bought it very early. */
                 this.speedMultiplier = 0.5;
                 this.boostStepMain = 1.02;   // +2% per hit instead of +4%
                 this.boostStepLate = 1.01;   // +1% past 100% instead of +2%

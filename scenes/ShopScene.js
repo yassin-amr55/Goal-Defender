@@ -65,15 +65,26 @@
         this.ballData = [
             { id: 'default', name: 'Default Ball', price: 0, ability: 'Standard ball', texture: 'ball_default' },
             { id: 'golden', name: 'Golden Ball', price: 150, ability: 'Hitbox shrinks 15% slower', texture: 'ball_golden' },
-            { id: 'steel', name: 'Steel Ball', price: 900, ability: 'Speed increases 10% slower', texture: 'ball_steel' },
+            { id: 'steel', name: 'Steel Ball', price: 900, ability: 'Speed boost +3.6% per hit, base speed 90%', texture: 'ball_steel' },
             { id: 'rubber', name: 'Rubber Ball', price: 3600, ability: 'Bounces 25% higher', texture: 'ball_rubber' },
             { id: 'ice', name: 'Ice Ball', price: 4500, ability: 'Hitbox shrinks 50% slower', texture: 'ball_ice' },
-            { id: 'anchor', name: 'Anchor Ball', price: 6000, ability: 'Speed increases 50% slower', texture: 'ball_anchor' },
             { id: 'revive', name: 'Revive Ball', price: 10000, ability: 'Saves you once - bounce off the goal', texture: 'ball_revive' },
             { id: 'fire', name: 'Fire Ball', price: 14500, ability: '+2 score per deflect', texture: 'ball_fire' },
             { id: 'neon', name: 'Neon Ball', price: 15000, ability: 'Speed boost +8% per hit', texture: 'ball_neon' },
             { id: 'sprung', name: 'Sprung Ball', price: 15250, ability: 'Bounces 60% higher', texture: 'ball_sprung' },
             { id: 'ghost', name: 'Ghost Ball', price: 15750, ability: 'Min hitbox 130% of ball', texture: 'ball_ghost' },
+            /* Anchor moved from $6,000 to $20,000, so it also moves DOWN this
+             * ladder - between Ghost ($15,750) and Money ($24,500). The array is
+             * rendered in order and the runtime guard below refuses to boot on an
+             * unsorted ladder, so a price change here is a reorder too.
+             *
+             * Its ability text now states the boost per hit instead of
+             * "Speed increases 50% slower". That phrasing was a double negative
+             * that never mentioned the boost, and its "50%" collided visually with
+             * Ice Ball's "Hitbox shrinks 50% slower" three rows above. The boost
+             * was always +2% per hit (boostStepMain 1.02); the copy just never
+             * said so. */
+            { id: 'anchor', name: 'Anchor Ball', price: 20000, ability: 'Speed boost +2% per hit, half base speed', texture: 'ball_anchor' },
             { id: 'money', name: 'Money Ball', price: 24500, ability: 'Earns $5 per deflect instead of $3', texture: 'ball_money' },
             { id: 'spark', name: 'Spark Ball', price: 30000, ability: 'Max speed boost 210%', texture: 'ball_spark' },
             { id: 'candy', name: 'Candy Ball', price: 50000, ability: '+3 score per deflect', texture: 'ball_candy' },
