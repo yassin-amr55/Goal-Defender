@@ -759,6 +759,17 @@ var cloudWatchTimer = 0;
          * that is not theirs. */
         var creating = !!typedUsername;
 
+        /* If this browser still holds a DIFFERENT account's save, it goes now -
+         * before the document is read, before applyAccount(), before
+         * mergeSave(), and before readSave() can adopt it into a new account.
+         *
+         * Placed here so the returning-player branch, the brand-new-account
+         * branch and the failure paths are all covered by one call. A returning
+         * player on their own account is untouched (owner === uid); a first-time
+         * player is untouched (owner === ''); only a genuine account switch
+         * wipes. */
+        clearForeignSave(user.uid);
+
         return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid).get()
             .then(function (snap) {
                 if (snap.exists) {
@@ -768,6 +779,10 @@ var cloudWatchTimer = 0;
                     // made since the last sync silently disappeared.
                     applyAccount(snap);
                     mergeSave(currentAccount.save);
+                    /* This account now owns whatever is on this device. Stamped
+                     * AFTER the merge so a failure part-way through cannot leave
+                     * a save attributed to an account that never claimed it. */
+                    stampSaveOwner(user.uid);
                     /* Seed the fingerprint from what we just read, so the
                      * watcher does not mistake this sign-in for an outside
                      * edit and "restore" the values it already applied. */
@@ -832,6 +847,7 @@ var cloudWatchTimer = 0;
                     })
                     .then(function () {
                         lastPushedSignature = signatureOf(name, readSave());
+                        stampSaveOwner(user.uid);
                         installCloudWatch();
                         /* A brand new account has just adopted this device's
                          * progress, so the old anonymous identity on the board
@@ -940,6 +956,64 @@ var cloudWatchTimer = 0;
             return auth.signInWithEmailAndPassword(fakeEmail(u), password)
                 .then(function (cred) { return afterAuth(cred.user, null, u); });
         });
+    }
+
+    /* ---------------- whose save is on this device? ----------------
+     *
+     * SAVE_OWNER_KEY records which account the local save belongs to. It is
+     * device-local and deliberately NOT in SAVE_KEYS: it is provenance about
+     * this browser, not progress, and syncing it would overwrite the other
+     * device's answer with the wrong one.
+     *
+     * Empty means nobody's - this browser has never had an account, so the save
+     * is anonymous progress and a new account is entitled to adopt it.
+     *
+     * Once an account signs in the uid is stamped here and NEVER cleared, not
+     * even by signOut(). That is the entire fix for the account-switch leak.
+     *
+     * signOut() deliberately leaves the local save in place so progress played
+     * while signed out is not thrown away. The cost of that decision was that
+     * after signing out of account A this browser still held A's money and score.
+     * The next sign-in then merged the incoming account's cloud save on top of
+     * it with Math.max(), so signing into B either inherited A's inflated
+     * figures or quietly lost A's real ones - and because the merged result was
+     * pushed straight back up on the next sync, whichever way it went became
+     * permanent. Two accounts sharing one browser ended up sharing one save.
+     */
+    var SAVE_OWNER_KEY = 'gdSaveOwnerUid';
+
+    function saveOwner() {
+        try { return localStorage.getItem(SAVE_OWNER_KEY) || ''; }
+        catch (e) { return ''; }
+    }
+
+    function stampSaveOwner(uid) {
+        try { localStorage.setItem(SAVE_OWNER_KEY, uid || ''); }
+        catch (e) { /* private mode: the wipe below is simply skipped */ }
+    }
+
+    /** Wipe a save that belongs to a DIFFERENT account. Returns true if it wiped.
+     *
+     * Called before anything reads or applies a cloud save, so a foreign save can
+     * never be merged, adopted or pushed anywhere. */
+    function clearForeignSave(uid) {
+        var owner = saveOwner();
+        if (!owner || owner === uid) return false;
+
+        var wiped = 0;
+        SAVE_KEYS.forEach(function (k) {
+            if (localStorage.getItem(k) !== null) {
+                localStorage.removeItem(k);
+                wiped++;
+            }
+        });
+        /* Nothing here is ours any more, including which ball was equipped.
+         * GameScene falls back to 'default' when this is absent, but leaving it
+         * explicit means the shop cannot show a ball the new account does not
+         * own. */
+        localStorage.setItem('goalDefenderEquippedBall', 'default');
+        stampSaveOwner(uid);
+        return wiped > 0;
     }
 
     function signOut() {
