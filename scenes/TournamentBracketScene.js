@@ -243,15 +243,15 @@ class TournamentBracketScene extends Phaser.Scene {
          * 109px column pitch - so on one line the two headers overlap by a few
          * pixels and read as "ROUND OF 1QUARTER FINALS". Split, the outer header
          * is 48px and clears both its neighbour and, on the right, the close
-         * button whose hit zone starts at x=1218. */
-        this._label(X_LT + 10, 134, 'ROUND OF 16', ['ROUND', 'OF 16']);
+         * button, which now sits at x=1220 and spans 1198..1242. */
+        this._label(X_LT + 18, 134, 'ROUND OF 16', ['ROUND', 'OF 16']);
         this._label(X_LQ, 134, 'QUARTER FINALS');
         this._label(X_LS, 134, 'SEMI FINALS');
         this._label(X_LF, 134, 'FINAL');
         this._label(X_RF, 134, 'FINAL');
         this._label(X_RS, 134, 'SEMI FINALS');
         this._label(X_RQ, 134, 'QUARTER FINALS');
-        this._label(X_RT - 10, 134, 'ROUND OF 16', ['ROUND', 'OF 16']);
+        this._label(X_RT - 18, 134, 'ROUND OF 16', ['ROUND', 'OF 16']);
 
         /* Flatten the eight first-round matches into sixteen teams, eight per
          * half. Team n lives on row n%8 of half floor(n/8). */

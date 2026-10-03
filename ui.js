@@ -41,8 +41,15 @@
      * opened immediately afterwards. It looked like the X was flaky.
      *
      * y=132 puts it clear below the gear and the mute icon, which end at y=59,
-     * and still reads as a corner control. */
-    var CLOSE_X = 1240;
+     * and still reads as a corner control.
+     *
+     * x=1220 puts it INSIDE the panel. Every sub-screen panel spans x 20..1260,
+     * and at x=1240 with a radius of 22 the X covered 1218..1262 - hanging 2px
+     * past the border, so the red disc visibly cut through the panel edge. At
+     * 1220 it covers 1196..1242, which lands on exactly the same 18px inset as
+     * the tournament bracket's right-hand column, so the corner control and the
+     * content share one margin. */
+    var CLOSE_X = 1220;
     var CLOSE_Y = 132;
 
     /* ---------------- font ---------------- */
