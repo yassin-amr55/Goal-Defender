@@ -30,6 +30,21 @@
      * are in the same corner. */
     var TOP_RIGHT_X = 1236;
 
+    /* Where the close X goes on a sub-screen.
+     *
+     * NOT the top-right corner. MenuScene's settings gear is centred at
+     * TOP_RIGHT_X with a radius of 25, so it covers x 1211..1261, y 9..59.
+     * The X used to sit at (1240, 40) - inside that circle.
+     *
+     * The failure was not the overlap itself. Clicking the X started MenuScene,
+     * and the SAME pointerup then landed on MenuScene's gear, so Settings
+     * opened immediately afterwards. It looked like the X was flaky.
+     *
+     * y=132 puts it clear below the gear and the mute icon, which end at y=59,
+     * and still reads as a corner control. */
+    var CLOSE_X = 1240;
+    var CLOSE_Y = 132;
+
     /* ---------------- font ---------------- */
 
     function installFont() {
@@ -554,7 +569,14 @@
         }
         paint(false);
 
+        /* The ZONE needs the depth, not just the graphics.
+         *
+         * Only the graphics was given one. The zone stayed at depth 0 while the
+         * mute icon in UI.topRight sits at depth 50, so on AchievementsScene -
+         * which draws both - the mute won the hit test over a close button that
+         * overlapped it. Hence a close button that worked only sometimes. */
         var hit = scene.add.zone(cx, cy, r * 2 + 8, r * 2 + 8).setOrigin(0.5);
+        hit.setDepth(o.depth !== undefined ? o.depth : 60);
         hit.setInteractive({ useHandCursor: true });
         hit.on('pointerover', function () { paint(true); });
         hit.on('pointerout', function () { paint(false); });
@@ -567,6 +589,8 @@
         FAMILY: FAMILY,
         VERSION: VERSION,
         TOP_RIGHT_X: TOP_RIGHT_X,
+        CLOSE_X: CLOSE_X,
+        CLOSE_Y: CLOSE_Y,
         TYPE: TYPE,
         installFont: installFont,
         shade: shade,

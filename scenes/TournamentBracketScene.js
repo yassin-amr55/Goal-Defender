@@ -1,3 +1,40 @@
+/* TournamentBracketScene - mirrored bracket, rewritten geometry.
+ *
+ * Structure follows the reference: teams as gold pills down the OUTER edges,
+ * rounds converging inward, champion slot dead centre.
+ *
+ * Teams 1-8 run down the left edge and teams 9-16 down the right, so every team
+ * appears exactly ONCE. An earlier attempt drew the same eight matches on both
+ * sides, which put all sixteen names on screen twice and made the bracket look
+ * like thirty-two entrants.
+ *
+ * Vertical layout is symmetric about y=350 and everything is derived from the
+ * bounds, so nothing can overflow the field:
+ *
+ *   R16  8 rows, pitch 58, second pill +31   -> 147..584   (field ends 600)
+ *   QF   4 rows, pitch 116, slots +/-16      -> 160..540
+ *   SF   2 rows, pitch 232, slots +/-16      -> 218..482
+ *   FIN  1 row,  slots +/-16                -> 334..366
+ *   CHAMPION centred at (640, 350), 150 wide -> 565..715
+ *
+ * Finals slots sit at x=505 / 775 so the champion pill clears them by 14px each
+ * side; overlapping it was the third bug in the first version.
+ */
+
+const TEAM_W = 148, TEAM_H = 30, TEAM_R = 15;
+const SLOT_W = 88, SLOT_H = 26, SLOT_R = 13;
+const CHAMP_W = 140, CHAMP_H = 44;
+
+const GOLD = 0xf0b429;
+const PALE = 0xffe9a8;
+const SLOT_STROKE = 0xd8a63a;
+const PILL_FILL = 0x1b2836;
+const SLOT_FILL = 0x1f2c3d;
+const EMPTY_FILL = 0x141f2c;
+
+const CY = 350;           // centre line
+const FIELD_BOTTOM = 600;
+
 class TournamentBracketScene extends Phaser.Scene {
     constructor() {
         super({ key: 'TournamentBracketScene' });
@@ -5,12 +42,9 @@ class TournamentBracketScene extends Phaser.Scene {
 
     init(data) {
         this.mode = data.mode || localStorage.getItem('tournamentMode') || 'qualifiers';
-        this.currentRound = data.round || localStorage.getItem('tournamentRound') || (this.mode === 'qualifiers' ? 'roundOf16' : 'roundOf32');
+        this.currentRound = data.round || localStorage.getItem('tournamentRound')
+            || (this.mode === 'qualifiers' ? 'roundOf16' : 'roundOf32');
 
-        // Only mark the tournament active if it is genuinely in progress.
-        // Previously this ran unconditionally, so simply viewing a bracket
-        // resurrected a finished tournament and brought back the
-        // "CONTINUE TOURNAMENT" button on the menu.
         if (localStorage.getItem('tournamentRound')) {
             localStorage.setItem('tournamentActive', 'true');
         }
@@ -18,91 +52,367 @@ class TournamentBracketScene extends Phaser.Scene {
         if (!localStorage.getItem('tournamentRound')) {
             localStorage.setItem('tournamentRound', this.currentRound);
         }
-
     }
 
     create() {
-        /* The bracket used to be a flat black void while every other screen was
-         * a stadium. It is the one content-heavy screen in the tournament - 16
-         * team names and five round headers - so the emptiness read as a debug
-         * view rather than a design choice. */
-        UI.stadium(this, { alpha: 0.55, groundAlpha: 0.35, grassAlpha: 0.25, dim: 0.45 });
+        UI.stadium(this, { alpha: 0.5, groundAlpha: 0.3, grassAlpha: 0.2, dim: 0.62 });
 
-        // Load existing bracket or generate new one
+        // The bracket field. 100..612 vertical, so every pill above stays inside.
+        UI.panel(this, {
+            x: 640, y: 356, w: 1240, h: 512, radius: 20,
+            fillTop: 0x162030, fillBottom: 0x0d1420,
+            border: 0x4a6a8a, borderWidth: 2
+        });
+
         this.loadOrGenerateBracket();
 
-        // Title
-        const tournamentName = this.mode === 'qualifiers' ? 'QUALIFIERS CUP' : 'CHAMPIONS CUP';
+        const cup = this.mode === 'qualifiers' ? 'QUALIFIERS CUP' : 'CHAMPIONS CUP';
         UI.title(this, {
-            text: tournamentName, x: 640, y: 52,
-            size: UI.TYPE.title, fill: '#ffcc00',
-            stroke: '#000000', thickness: 4, offset: 2
+            text: cup, x: 640, y: 44,
+            size: 28, fill: '#ffd45e', stroke: '#f0a500', thickness: 5
         });
-
-        // Current round indicator
-        let roundName = this.currentRound;
-        if (roundName === 'roundOf16') roundName = 'ROUND OF 16';
-        else if (roundName === 'roundOf32') roundName = 'ROUND OF 32';
-        else if (roundName === 'quarterFinals') roundName = 'QUARTER FINALS';
-        else if (roundName === 'semiFinals') roundName = 'SEMI FINALS';
-        else if (roundName === 'finals') roundName = 'FINALS';
-
-        this.add.text(640, 98, `Next: ${roundName}`, {
-            fontSize: UI.TYPE.body + 'px',
-            fill: '#ffffff',
-            fontStyle: 'bold',
-            stroke: '#000000',
-            strokeThickness: 2
+        this.add.text(640, 78, 'TOURNAMENT BRACKET', {
+            fontSize: '20px', color: '#ffffff', fontFamily: UI.FAMILY,
+            fontStyle: '900', stroke: '#0b1220', strokeThickness: 4
         }).setOrigin(0.5);
 
-        // Draw bracket
-        this.drawBracket();
+        if (this.currentRound === 'roundOf32' && this.mode === 'champions') {
+            this.drawRoundOf32Grid();
+        } else {
+            this.drawMirrorBracket();
+        }
 
-        // Play match button
-        UI.button(this, {
-            x: 640, y: 662, w: 280, h: 64,
-            label: 'PLAY MATCH',
-            textSize: UI.TYPE.lead,
-            fillTop: 0x3ddc6b, fillBottom: 0x17a34a,
-            radius: 16,
-            onClick: () => {
-                this.scene.start('TournamentGameScene', {
-                    mode: this.mode,
-                    round: this.currentRound,
-                    opponent: this.getNextOpponent()
-                });
-            }
+        UI.closeButton(this, {
+            x: UI.CLOSE_X, y: UI.CLOSE_Y, r: 22,
+            onClick: () => this.scene.start('TournamentMenuScene')
         });
 
-        /* M2: the red X from Settings, so closing is in the same place on every
-         * sub-screen instead of BACK at bottom-left here and bottom-centre there.
-         * Placed in the top-right corner because the bracket columns run from
-         * x=120 to x=1080 and a panel-relative position would land on the
-         * WINNER column. */
-        UI.closeButton(this, {
-            x: 1240, y: 40, r: 22,
-            onClick: () => this.scene.start('TournamentMenuScene')
+        UI.button(this, {
+            x: 640, y: 664, w: 300, h: 58,
+            label: 'PLAY MATCH', textSize: UI.TYPE.lead,
+            fillTop: 0x3ddc6b, fillBottom: 0x17a34a, radius: 16,
+            onClick: () => this.scene.start('TournamentGameScene', {
+                mode: this.mode,
+                round: this.currentRound,
+                opponent: this.getNextOpponent()
+            })
         });
     }
 
-    loadOrGenerateBracket() {
-        // Try to load existing bracket
-        const savedBracket = localStorage.getItem('tournamentBracket');
+    /* ---------------- geometry ---------------- */
 
-        if (savedBracket) {
-            // Load existing bracket
-            this.bracket = JSON.parse(savedBracket);
+    /* Row i of n, symmetric about CY. */
+    _row(i, n, pitch) { return CY + (i - (n - 1) / 2) * pitch; }
+
+    r16Y(i) { return this._row(i, 8, 58); }
+    qfY(i) { return this._row(i, 4, 116); }
+    sfY(i) { return this._row(i, 2, 232); }
+
+    /* Column centres.
+     *
+     * These are SPACED, not eyeballed. The left half has three slot columns and
+     * the champion pill to fit between the right edge of the team pills (226) and
+     * the champion's left edge (570) - 344px for four boxes. At 88px per slot that
+     * leaves 16px of gutter per column.
+     *
+     * The first attempt used 96px slots at x=322/430/524, which put the finals
+     * slot 2px under the semi slot and the champion 7px over both finals slots.
+     * Anything that overlaps here hides a team name. */
+    get X_LT() { return 152; }   // left team pills   -> 78..226
+    get X_RT() { return 1128; }  // right team pills  -> 1054..1202
+    get X_LQ() { return 290; }   // -> 246..334
+    get X_RQ() { return 990; }   // -> 946..1034
+    get X_LS() { return 394; }   // -> 350..438
+    get X_RS() { return 886; }   // -> 842..930
+    get X_LF() { return 498; }   // -> 454..542
+    get X_RF() { return 782; }   // -> 738..826
+    // champion -> 570..710, clearing both finals columns by 28px
+
+    /* ---------------- pill primitives ---------------- */
+
+    _pill(cx, cy, w, h, fill, stroke, sw, r) {
+        const g = this.add.graphics();
+        g.fillStyle(0x000000, 0.32);
+        g.fillRoundedRect(cx - w / 2 + 1, cy - h / 2 + 2, w, h, r);
+        g.fillGradientStyle(fill, fill, darker(fill), darker(fill), 1);
+        g.fillRoundedRect(cx - w / 2, cy - h / 2, w, h, r);
+        g.lineStyle(sw, stroke, 1);
+        g.strokeRoundedRect(cx - w / 2, cy - h / 2, w, h, r);
+    }
+
+    _teamPill(cx, cy, name, isPlayer, isWinner) {
+        this._pill(cx, cy, TEAM_W, TEAM_H,
+            isPlayer ? GOLD : PILL_FILL,
+            isPlayer ? PALE : GOLD, 2, TEAM_R);
+
+        this.add.circle(cx + TEAM_W / 2 - 15, cy, 8,
+            isPlayer ? 0xfff0b8 : GOLD, 1);
+
+        this.add.text(cx + 8, cy, this.trunc(name, 13), {
+            fontSize: '13px',
+            color: isPlayer ? '#1a1a1a' : (isWinner ? '#7fe08a' : '#ffffff'),
+            fontFamily: UI.FAMILY, fontStyle: '900'
+        }).setOrigin(1, 0.5);
+    }
+
+    _slotPill(cx, cy, name, isWinner) {
+        const has = name && name !== 'TBD';
+        this._pill(cx, cy, SLOT_W, SLOT_H,
+            has ? SLOT_FILL : EMPTY_FILL,
+            has ? (isWinner ? 0x3ddc6b : SLOT_STROKE) : 0x5a6b7d, 2, SLOT_R);
+        this.add.text(cx, cy, has ? this.trunc(name, 11) : '', {
+            fontSize: '13px', color: has ? '#ffffff' : '#5f7386',
+            fontFamily: UI.FAMILY, fontStyle: '800'
+        }).setOrigin(0.5);
+    }
+
+    /* A pill feeding one point, as a Z: out, across, in. */
+    _feed(x1, y1, x2, y2, bendX) {
+        const g = this.add.graphics();
+        g.lineStyle(2, GOLD, 0.85);
+        g.beginPath();
+        g.moveTo(x1, y1);
+        g.lineTo(bendX, y1);
+        g.lineTo(bendX, y2);
+        g.lineTo(x2, y2);
+        g.strokePath();
+    }
+
+    /* Two pills converging into one point. */
+    _merge(x1, y1, x2, y2, bendX, midY) {
+        const g = this.add.graphics();
+        g.lineStyle(2, GOLD, 0.85);
+        g.beginPath();
+        g.moveTo(x1, y1); g.lineTo(bendX, y1); g.lineTo(bendX, midY);
+        g.moveTo(x2, y2); g.lineTo(bendX, y2); g.lineTo(bendX, midY);
+        g.strokePath();
+    }
+
+    _label(x, y, text) {
+        this.add.text(x, y, text, {
+            fontSize: '13px', color: '#f0b429', fontFamily: UI.FAMILY,
+            fontStyle: '900', stroke: '#0b1220', strokeThickness: 3
+        }).setOrigin(0.5);
+    }
+
+    /* ---------------- the bracket ---------------- */
+
+    drawMirrorBracket() {
+        const you = localStorage.getItem('tournamentTeamName') || 'Your Team';
+        const r16 = this.bracket.roundOf16 || [];
+        const qf = this.bracket.quarterFinals || [];
+        const sf = this.bracket.semiFinals || [];
+        const fin = this.bracket.finals || { team1: 'TBD', team2: 'TBD', winner: null };
+
+        const LT = this.X_LT, RT = this.X_RT;
+        const LQ = this.X_LQ, RQ = this.X_RQ;
+        const LS = this.X_LS, RS = this.X_RS;
+        const LF = this.X_LF, RF = this.X_RF;
+
+        this._label(LT, 118, 'ROUND OF 16');
+        this._label(LQ, 118, 'QUARTER FINALS');
+        this._label(LS, 118, 'SEMI FINALS');
+        this._label(LF - 26, 118, 'FINALS');
+        this._label(RF + 26, 118, 'FINALS');
+        this._label(RS, 118, 'SEMI FINALS');
+        this._label(RQ, 118, 'QUARTER FINALS');
+        this._label(RT, 118, 'ROUND OF 16');
+
+        /* ---- ROUND OF 16: 8 rows per side, full height, mirrored ----
+         *
+         * One PILL per row, not two in a close pair. Left carries matches 0-3
+         * (teams 0-7), right carries matches 4-7 (teams 8-15), and each side is
+         * eight evenly spaced rows down the whole field - which is what makes the
+         * two halves mirror each other.
+         *
+         * The previous version drew four tight pairs on the left and four on the
+         * right, so each side only occupied half the height and the bracket read
+         * as two unrelated blocks with a connector running off the bottom. */
+        const r16Team = (i) => {
+            const m = r16[Math.floor(i / 2)] || { team1: 'TBD', team2: 'TBD', winner: null };
+            return i % 2 === 0 ? m.team1 : m.team2;
+        };
+        const r16Win = (i) => {
+            const m = r16[Math.floor(i / 2)] || { team1: 'TBD', team2: 'TBD', winner: null };
+            return m.winner === (i % 2 === 0 ? m.team1 : m.team2);
+        };
+
+        for (let side = 0; side < 2; side++) {
+            const left = side === 0;
+            const cx = left ? LT : RT;
+            const inner = left ? (cx + TEAM_W / 2) : (cx - TEAM_W / 2);
+            const bend = left ? inner + 30 : inner - 30;
+
+            for (let row = 0; row < 8; row++) {
+                const idx = side * 8 + row;
+                const y = this.r16Y(row);
+                this._teamPill(cx, y, r16Team(idx), r16Team(idx) === you, r16Win(idx));
+            }
+
+            // Each PAIR of rows is one first-round match, and its winner feeds
+            // quarter-final match `match`, on the near or far slot depending on
+            // which side of the bracket this is.
+            for (let match = 0; match < 4; match++) {
+                const yA = this.r16Y(match * 2);
+                const yB = this.r16Y(match * 2 + 1);
+                const mid = (yA + yB) / 2;
+                const qY = this.qfY(match) + (left ? -16 : 16);
+                const slotX = left ? (LQ - SLOT_W / 2) : (RQ + SLOT_W / 2);
+
+                this._merge(inner, yA, inner, yB, bend, mid);
+                this._feed(bend, mid, slotX, qY,
+                    left ? bend + (slotX - bend) / 2 : bend - (slotX - bend) / 2);
+            }
+        }
+
+        /* ---- QUARTER FINALS ----
+         *
+         * The two halves are SEPARATE halves of one draw, not a mirror image of
+         * each other: the left half owns quarter-finals 0 and 1, the right half
+         * owns 2 and 3. Drawing qf[0..3] on both sides showed all four matches
+         * twice and put eight quarter-final slots on screen for a bracket that
+         * only has four. */
+        for (let i = 0; i < 4; i++) {
+            const m = qf[i] || { team1: 'TBD', team2: 'TBD', winner: null };
+            const left = i < 2;
+            const cx = left ? LQ : RQ;
+            const y = this.qfY(i);
+
+            this._slotPill(cx, y - 16, m.team1, m.winner === m.team1);
+            this._slotPill(cx, y + 16, m.team2, m.winner === m.team2);
+        }
+
+        /* ---- SEMI FINALS: each half's two quarter-finals converge ---- */
+        for (let half = 0; half < 2; half++) {
+            const left = half === 0;
+            const cx = left ? LS : RS;
+            const m = sf[half] || { team1: 'TBD', team2: 'TBD', winner: null };
+            const y = this.sfY(half);
+            const inner = left ? (cx + SLOT_W / 2) : (cx - SLOT_W / 2);
+
+            this._slotPill(cx, y - 16, m.team1, m.winner === m.team1);
+            this._slotPill(cx, y + 16, m.team2, m.winner === m.team2);
+
+            // The two quarter-finals inside this half.
+            const qA = this.qfY(half * 2);
+            const qB = this.qfY(half * 2 + 1);
+            const qMid = (qA + qB) / 2;
+            const qx = left ? (LQ + SLOT_W / 2) : (RQ - SLOT_W / 2);
+            const qb = left ? qx + 20 : qx - 20;
+
+            this._merge(qx, qA, qx, qB, qb, qMid);
+            this._feed(qb, qMid, inner, y, left ? qb + (inner - qb) / 2 : qb - (inner - qb) / 2);
+        }
+
+        /* ---- FINALS, then the champion between them ---- */
+        this._slotPill(LF, CY - 16, fin.team1, fin.winner === fin.team1);
+        this._slotPill(RF, CY + 16, fin.team2, fin.winner === fin.team2);
+
+        const cw = CHAMP_W / 2;
+        this._pill(640, CY, CHAMP_W, CHAMP_H,
+            fin.winner ? GOLD : 0x101a26, fin.winner ? PALE : SLOT_STROKE, 3, 22);
+        this.add.text(640, CY - 7, fin.winner ? this.trunc(fin.winner, 16) : 'CHAMPION', {
+            fontSize: '16px', color: fin.winner ? '#1a1a1a' : '#9fb3c8',
+            fontFamily: UI.FAMILY, fontStyle: '900'
+        }).setOrigin(0.5);
+        this.add.text(640, CY + 13, fin.winner ? 'TOURNAMENT WINNER' : 'AWAITING FINAL', {
+            fontSize: UI.TYPE.micro + 'px', color: fin.winner ? '#7a5a10' : '#8fa6bd',
+            fontFamily: UI.FAMILY, fontStyle: '900'
+        }).setOrigin(0.5);
+
+        // Each finalist runs into the side of the champion pill.
+        this._feed(LF + SLOT_W / 2, CY - 16, 640 - cw, CY, LF + SLOT_W / 2 + 22);
+        this._feed(LF + SLOT_W / 2, CY + 16, 640 - cw, CY, LF + SLOT_W / 2 + 22);
+        this._feed(RF - SLOT_W / 2, CY - 16, 640 + cw, CY, RF - SLOT_W / 2 - 22);
+        this._feed(RF - SLOT_W / 2, CY + 16, 640 + cw, CY, RF - SLOT_W / 2 - 22);
+
+        this.add.text(640, 590, 'Next: ' + this.roundName(), {
+            fontSize: '15px', color: '#ffd45e', fontFamily: UI.FAMILY, fontStyle: '800',
+            stroke: '#0b1220', strokeThickness: 4
+        }).setOrigin(0.5);
+    }
+
+    /* Round of 32 stays its own page: 32 pills will not fit the mirrored layout
+     * at a legible size. Rebuilt with the same pills and marker dots so it reads
+     * as the same object rather than a list. */
+    drawRoundOf32Grid() {
+        const you = localStorage.getItem('tournamentTeamName') || 'Your Team';
+        this.add.text(640, 122, 'ROUND OF 32', {
+            fontSize: '26px', color: '#ffd45e', fontFamily: UI.FAMILY, fontStyle: '900',
+            stroke: '#0b1220', strokeThickness: 5
+        }).setOrigin(0.5);
+        this.add.text(640, 152, 'All 32 competing teams', {
+            fontSize: '14px', color: '#9fb3c8', fontFamily: UI.FAMILY, fontStyle: '700'
+        }).setOrigin(0.5);
+
+        const matches = this.bracket.roundOf32 || [];
+        const W = 178, H = 28, R = 14;
+        const colX = [190, 470, 750, 1030];
+        const startY = 200, rowH = 42;
+
+        for (let c = 0; c < 4; c++) {
+            this._label(colX[c], 188, 'GROUP ' + String.fromCharCode(65 + c));
+        }
+
+        for (let c = 0; c < 4; c++) {
+            for (let r = 0; r < 8; r++) {
+                const idx = c * 8 + r;
+                const m = matches[Math.floor(idx / 2)];
+                if (!m) continue;
+                const team = idx % 2 === 0 ? m.team1 : m.team2;
+                const y = startY + r * rowH;
+                const isPlayer = team === you;
+
+                this._pill(colX[c], y, W, H,
+                    isPlayer ? GOLD : PILL_FILL, isPlayer ? PALE : GOLD, 2, R);
+                this.add.circle(colX[c] - W / 2 + 15, y, 8,
+                    isPlayer ? 0xfff0b8 : GOLD, 1);
+                this.add.text(colX[c] + 8, y, this.trunc(team, 15), {
+                    fontSize: '13px',
+                    color: isPlayer ? '#1a1a1a' : (m.winner === team ? '#7fe08a' : '#ffffff'),
+                    fontFamily: UI.FAMILY, fontStyle: '800'
+                }).setOrigin(1, 0.5);
+            }
+        }
+
+        const next = this.getNextOpponent();
+        if (next && next !== 'TBD') {
+            this.add.text(640, 578, 'Next:  ' + you + '   vs   ' + next, {
+                fontSize: '16px', color: '#ffffff', fontFamily: UI.FAMILY, fontStyle: '800',
+                stroke: '#0b1220', strokeThickness: 4
+            }).setOrigin(0.5);
+        }
+    }
+
+    /* ---------------- data ---------------- */
+
+    roundName() {
+        const r = this.currentRound;
+        if (r === 'roundOf16') return 'ROUND OF 16';
+        if (r === 'roundOf32') return 'ROUND OF 32';
+        if (r === 'quarterFinals') return 'QUARTER FINALS';
+        if (r === 'semiFinals') return 'SEMI FINALS';
+        if (r === 'finals') return 'FINALS';
+        return r;
+    }
+
+    trunc(name, n) {
+        if (!name || name === 'TBD') return name;
+        return name.length > n ? name.substring(0, n - 3) + '...' : name;
+    }
+
+    loadOrGenerateBracket() {
+        const saved = localStorage.getItem('tournamentBracket');
+        if (saved) {
+            try { this.bracket = JSON.parse(saved); } catch (e) { this.generateBracket(); }
         } else {
-            // Generate new bracket
             this.generateBracket();
-            // Save the new bracket
             localStorage.setItem('tournamentBracket', JSON.stringify(this.bracket));
         }
     }
 
     generateBracket() {
-        // Generate random team names
-        const teamNames = [
+        const pool = [
             "Thunder Strikers", "Golden Eagles", "Fire Dragons", "Ice Wolves",
             "Storm Chasers", "Lightning Bolts", "Shadow Hunters", "Crimson Tide",
             "Blue Sharks", "Green Hornets", "Silver Bullets", "Black Panthers",
@@ -112,277 +422,57 @@ class TournamentBracketScene extends Phaser.Scene {
             "Diamond Aces", "Platinum Stars", "Gold Rush", "Silver Lining",
             "Neon Ninjas", "Cyber Samurai", "Pixel Pirates", "Digital Demons"
         ];
-
-        const playerTeam = localStorage.getItem('tournamentTeamName') || 'Your Team';
-        const numTeams = this.mode === 'champions' ? 32 : 16;
-
-        // Shuffle and select teams
-        const shuffled = [...teamNames].sort(() => Math.random() - 0.5);
-        const selectedTeams = shuffled.slice(0, numTeams - 1);
-        selectedTeams.unshift(playerTeam); // Player team first
-
-        this.teams = selectedTeams;
-        this.bracket = this.createBracketStructure();
+        const you = localStorage.getItem('tournamentTeamName') || 'Your Team';
+        const n = this.mode === 'champions' ? 32 : 16;
+        const picked = [...pool].sort(() => Math.random() - 0.5).slice(0, n - 1);
+        picked.unshift(you);
+        this.teams = picked;
+        this.bracket = this.structure();
     }
 
-    createBracketStructure() {
-        const bracket = {};
-        const playerTeam = this.teams[0];
-
-        // Create initial round matches
+    structure() {
+        const b = {};
         if (this.mode === 'champions') {
-            // Round of 32 (16 matches)
-            bracket.roundOf32 = [];
+            b.roundOf32 = [];
             for (let i = 0; i < 16; i++) {
-                bracket.roundOf32.push({
+                b.roundOf32.push({
                     team1: this.teams[i * 2] || 'TBD',
-                    team2: this.teams[i * 2 + 1] || 'TBD',
-                    winner: null
+                    team2: this.teams[i * 2 + 1] || 'TBD', winner: null
                 });
             }
-
-            // Initialize empty subsequent rounds
-            bracket.roundOf16 = Array(8).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
-            bracket.quarterFinals = Array(4).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
-            bracket.semiFinals = Array(2).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
-            bracket.finals = { team1: 'TBD', team2: 'TBD', winner: null };
+            b.roundOf16 = Array(8).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
         } else {
-            // Round of 16 (8 matches)
-            bracket.roundOf16 = [];
+            b.roundOf16 = [];
             for (let i = 0; i < 8; i++) {
-                bracket.roundOf16.push({
+                b.roundOf16.push({
                     team1: this.teams[i * 2] || 'TBD',
-                    team2: this.teams[i * 2 + 1] || 'TBD',
-                    winner: null
+                    team2: this.teams[i * 2 + 1] || 'TBD', winner: null
                 });
             }
-
-            // Initialize empty subsequent rounds
-            bracket.quarterFinals = Array(4).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
-            bracket.semiFinals = Array(2).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
-            bracket.finals = { team1: 'TBD', team2: 'TBD', winner: null };
         }
-
-        return bracket;
-    }
-
-    drawBracket() {
-        if (this.mode === 'champions') {
-            this.drawBracket32();
-        } else {
-            this.drawBracket16();
-        }
-    }
-
-    drawBracket16() {
-        /* startY 138 with spacing 58 puts the 16th team box at 574, ending at
-         * 587 - which clears the top of the PLAY MATCH button (630) by 43px. It
-         * was 590 / spacing 60, ending at 602 with only 28px of clearance, and on
-         * a 32-team bracket the grid ran straight through the bottom bar.
-         *
-         * boxWidth 140 -> 160 because the team name went from 12px to 14px and
-         * 140px could no longer hold a long name without clipping. */
-        const startY = 152;
-        const spacing = 58;
-        const boxWidth = 160;
-        const boxHeight = 26;
-        const playerTeam = localStorage.getItem('tournamentTeamName') || 'Your Team';
-
-        // Round of 16 (left side)
-        this.add.text(200, 126, 'ROUND OF 16', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
-
-        const r16Matches = this.bracket.roundOf16 || [];
-        for (let i = 0; i < 8; i++) {
-            const match = r16Matches[i] || { team1: 'TBD', team2: 'TBD', winner: null };
-            const y = startY + i * spacing;
-
-            // Team 1
-            const isPlayer1 = match.team1 === playerTeam;
-            const team1Color = isPlayer1 ? 0xffff00 : (match.winner === match.team1 ? 0x00aa00 : 0x4488cc);
-            this.add.rectangle(200, y, boxWidth, boxHeight, team1Color, 1).setStrokeStyle(isPlayer1 ? 3 : 1, isPlayer1 ? 0xffffff : 0xffffff);
-            this.add.text(200, y, this.truncateTeamName(match.team1), { fontSize: UI.TYPE.small + 'px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-            if (isPlayer1) this.drawPlayerMarker(200, y, boxHeight);
-
-            // Team 2
-            const isPlayer2 = match.team2 === playerTeam;
-            const team2Color = isPlayer2 ? 0xffff00 : (match.winner === match.team2 ? 0x00aa00 : 0x4488cc);
-            this.add.rectangle(200, y + 30, boxWidth, boxHeight, team2Color, 1).setStrokeStyle(isPlayer2 ? 3 : 1, 0xffffff);
-            this.add.text(200, y + 30, this.truncateTeamName(match.team2), { fontSize: UI.TYPE.small + 'px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-            if (isPlayer2) this.drawPlayerMarker(200, y + 30, boxHeight);
-        }
-
-        // Quarter Finals - should show 8 teams (4 matches)
-        this.add.text(400, 126, 'QUARTER FINALS', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
-        const qfMatches = this.bracket.quarterFinals || [];
-        for (let i = 0; i < 4; i++) {
-            const match = qfMatches[i] || { team1: 'TBD', team2: 'TBD', winner: null };
-            const y = startY + 30 + i * (spacing * 2);
-
-            // Team 1
-            const team1Color = match.team1 === playerTeam ? 0xffff00 : (match.winner === match.team1 ? 0x00aa00 : (match.team1 !== 'TBD' ? 0x4488cc : 0x666666));
-            this.add.rectangle(400, y, boxWidth, boxHeight, team1Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(400, y, this.truncateTeamName(match.team1 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-
-            // Team 2
-            const team2Color = match.team2 === playerTeam ? 0xffff00 : (match.winner === match.team2 ? 0x00aa00 : (match.team2 !== 'TBD' ? 0x4488cc : 0x666666));
-            this.add.rectangle(400, y + 30, boxWidth, boxHeight, team2Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(400, y + 30, this.truncateTeamName(match.team2 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-        }
-
-        // Semi Finals - should show 4 teams (2 matches)
-        this.add.text(600, 126, 'SEMI FINALS', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
-        const sfMatches = this.bracket.semiFinals || [];
-        for (let i = 0; i < 2; i++) {
-            const match = sfMatches[i] || { team1: 'TBD', team2: 'TBD', winner: null };
-            const y = startY + 90 + i * (spacing * 4);
-
-            // Team 1
-            const team1Color = match.team1 === playerTeam ? 0xffff00 : (match.winner === match.team1 ? 0x00aa00 : (match.team1 !== 'TBD' ? 0x4488cc : 0x666666));
-            this.add.rectangle(600, y, boxWidth, boxHeight, team1Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(600, y, this.truncateTeamName(match.team1 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-
-            // Team 2
-            const team2Color = match.team2 === playerTeam ? 0xffff00 : (match.winner === match.team2 ? 0x00aa00 : (match.team2 !== 'TBD' ? 0x4488cc : 0x666666));
-            this.add.rectangle(600, y + 30, boxWidth, boxHeight, team2Color, 1).setStrokeStyle(1, 0xffffff);
-            this.add.text(600, y + 30, this.truncateTeamName(match.team2 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: team2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-        }
-
-        // Finals - should show 2 teams (1 match)
-        this.add.text(800, 126, 'FINALS', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
-        const finalMatch = this.bracket.finals || { team1: 'TBD', team2: 'TBD', winner: null };
-
-        // Team 1
-        const final1Color = finalMatch.team1 === playerTeam ? 0xffff00 : (finalMatch.winner === finalMatch.team1 ? 0x00aa00 : (finalMatch.team1 !== 'TBD' ? 0x4488cc : 0x666666));
-        this.add.rectangle(800, startY + 210, boxWidth, boxHeight, final1Color, 1).setStrokeStyle(1, 0xffffff);
-        this.add.text(800, startY + 210, this.truncateTeamName(finalMatch.team1 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: final1Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-
-        // Team 2
-        const final2Color = finalMatch.team2 === playerTeam ? 0xffff00 : (finalMatch.winner === finalMatch.team2 ? 0x00aa00 : (finalMatch.team2 !== 'TBD' ? 0x4488cc : 0x666666));
-        this.add.rectangle(800, startY + 240, boxWidth, boxHeight, final2Color, 1).setStrokeStyle(1, 0xffffff);
-        this.add.text(800, startY + 240, this.truncateTeamName(finalMatch.team2 || 'TBD'), { fontSize: UI.TYPE.small + 'px', fill: final2Color === 0x666666 ? '#ffffff' : '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-
-        // Winner
-        this.add.text(1000, 126, 'WINNER', { fontSize: UI.TYPE.body + 'px', fill: '#ffcc00', fontStyle: 'bold' }).setOrigin(0.5);
-        const noWinnerYet = !finalMatch.winner;
-        const winnerColor = finalMatch.winner === playerTeam ? 0xffff00 : (noWinnerYet ? 0xffcc00 : 0x00aa00);
-        this.add.rectangle(1000, startY + 210, boxWidth, boxHeight, winnerColor, 1).setStrokeStyle(2, 0xffffff);
-
-        if (noWinnerYet) {
-            // No champion decided yet - show the trophy icon, or "TBD" as a fallback
-            if (this.textures.exists('trophy-icon')) {
-                // 0.18 keeps the 128px icon at 23px, inside the 26px box.
-                this.add.image(1000, startY + 210, 'trophy-icon').setScale(0.18);
-            } else {
-                this.add.text(1000, startY + 210, 'TBD', { fontSize: '20px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-            }
-        } else {
-            this.add.text(1000, startY + 210, this.truncateTeamName(finalMatch.winner), { fontSize: UI.TYPE.small + 'px', fill: '#000000', fontStyle: 'bold' }).setOrigin(0.5);
-        }
-    }
-
-    drawBracket32() {
-        const playerTeam = localStorage.getItem('tournamentTeamName') || 'Your Team';
-
-        if (this.currentRound === 'roundOf32') {
-            // Round of 32: Show all 32 teams in grid format (not bracket)
-            this.add.text(640, 130, 'CHAMPIONS CUP - ROUND OF 32', { fontSize: '28px', fill: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-            this.add.text(640, 160, 'All 32 Competing Teams', { fontSize: '22px', fill: '#ffff00' }).setOrigin(0.5);
-
-            // Display teams in a compact grid format
-            const startY = 200;
-            const teamBoxWidth = 140;
-            const teamBoxHeight = 22;
-            const spacing = 28;
-            const teamsPerColumn = 8;
-
-            if (this.bracket.roundOf32) {
-                const r32Matches = this.bracket.roundOf32 || [];
-                let teamIndex = 0;
-
-                for (let col = 0; col < 4; col++) {
-                    const x = 180 + col * 230; // Spread columns across screen
-
-                    for (let row = 0; row < teamsPerColumn && teamIndex < r32Matches.length * 2; row++) {
-                        const matchIndex = Math.floor(teamIndex / 2);
-                        const isTeam1 = teamIndex % 2 === 0;
-                        const match = r32Matches[matchIndex];
-
-                        if (match) {
-                            const team = isTeam1 ? match.team1 : match.team2;
-                            const y = startY + row * spacing;
-
-                            // Color coding
-                            let teamColor = 0x4488cc; // Default blue
-                            if (team === playerTeam) {
-                                teamColor = 0xffff00; // Player team yellow
-                            } else if (match.winner === team) {
-                                teamColor = 0x00aa00; // Winner green
-                            }
-
-                            // Team box
-                            this.add.rectangle(x, y, teamBoxWidth, teamBoxHeight, teamColor, 1).setStrokeStyle(1, 0xffffff);
-                            this.add.text(x, y, this.truncateTeamName(team, 14), {
-                                fontSize: UI.TYPE.micro + 'px',
-                                fill: '#000000',
-                                fontStyle: 'bold'
-                            }).setOrigin(0.5);
-                        }
-
-                        teamIndex++;
-                    }
-                }
-            }
-
-            // Show next opponent if available
-            const nextOpponent = this.getNextOpponent();
-            if (nextOpponent && nextOpponent !== 'TBD') {
-                this.add.text(640, 450, `Next Match: ${playerTeam} vs ${nextOpponent}`, { fontSize: '20px', fill: '#ffffff' }).setOrigin(0.5);
-            }
-        } else {
-            // Round of 16 and beyond: Show bracket like Qualifiers Cup
-            this.drawBracket16();
-        }
-    }
-
-    /** Width of a bracket box, so the player's accent bar can be aligned to it. */
-    boxW() { return 160; }
-
-    /* Marks which box is the player's own.
-     *
-     * The player's row was the only gold box in a column of identical blue ones,
-     * and it carried no label - so with a short team name it read as a rendering
-     * fault rather than as "this is you". Now it gets a white left accent bar and
-     * a YOUR TEAM caption above the column. */
-    drawPlayerMarker(x, y, boxH) {
-        const g = this.add.graphics();
-        g.fillStyle(0xffffff, 0.92);
-        g.fillRoundedRect(x - this.boxW() / 2 - 8, y - boxH / 2 + 2, 4, boxH - 4, 2);
-    }
-
-    truncateTeamName(name, maxLength = 15) {
-        if (!name || name === 'TBD') return name;
-        return name.length > maxLength ? name.substring(0, maxLength - 3) + '...' : name;
+        b.quarterFinals = Array(4).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
+        b.semiFinals = Array(2).fill(null).map(() => ({ team1: 'TBD', team2: 'TBD', winner: null }));
+        b.finals = { team1: 'TBD', team2: 'TBD', winner: null };
+        return b;
     }
 
     getNextOpponent() {
-        const playerTeam = localStorage.getItem('tournamentTeamName') || 'Your Team';
-        const currentRound = this.currentRound;
-
-        // Find player's match in current round
-        if (this.bracket[currentRound]) {
-            const matches = Array.isArray(this.bracket[currentRound]) ? this.bracket[currentRound] : [this.bracket[currentRound]];
-
-            for (let match of matches) {
-                if (match.team1 === playerTeam) {
-                    return match.team2;
-                } else if (match.team2 === playerTeam) {
-                    return match.team1;
-                }
+        const you = localStorage.getItem('tournamentTeamName') || 'Your Team';
+        const cur = this.currentRound;
+        if (this.bracket[cur]) {
+            const ms = Array.isArray(this.bracket[cur]) ? this.bracket[cur] : [this.bracket[cur]];
+            for (const m of ms) {
+                if (m.team1 === you) return m.team2;
+                if (m.team2 === you) return m.team1;
             }
         }
-
-        // Fallback to random opponent
-        const opponents = ['Thunder Strikers', 'Golden Eagles', 'Fire Dragons', 'Ice Wolves'];
-        return opponents[Math.floor(Math.random() * opponents.length)];
+        return ['Thunder Strikers', 'Golden Eagles', 'Fire Dragons', 'Ice Wolves'][0];
     }
+}
+
+function darker(hex) {
+    const r = Math.max(0, ((hex >> 16) & 0xff) - 24);
+    const g = Math.max(0, ((hex >> 8) & 0xff) - 24);
+    const b = Math.max(0, (hex & 0xff) - 20);
+    return (r << 16) | (g << 8) | b;
 }

@@ -50,7 +50,6 @@ class TutorialScene extends GameScene {
         });
 
         this.startLesson();
-        this.createSkipButton();
     }
 
     /* ================= pacing ================= */
@@ -268,10 +267,6 @@ class TutorialScene extends GameScene {
         });
         this.dim.destroy();
 
-        // The skip control has served its purpose - the results screen has its
-        // own HOME button.
-        if (this.skipBtn) { this.skipBtn.destroy(); this.skipBtn = null; }
-
         /* ---- title ---- */
         this.add.text(640, 116, 'NICE WORK', {
             fontSize: '64px', color: '#000000', fontStyle: '900', alpha: 0.45
@@ -384,48 +379,6 @@ class TutorialScene extends GameScene {
     // steps would advance underneath the pause card.
     createMuteButton() {
         UI.topRight(this, {});
-    }
-
-    /* F-22: the tutorial had no way out until it finished.
-     *
-     * The lesson is four timed beats plus a results screen, and the only exit was
-     * the HOME button on the RESULTS screen - which is deliberately locked for the
-     * first second. So a player who had already learned the game had to sit
-     * through the whole thing again, with no way to leave and no indication they
-     * could.
-     *
-     * This adds a small SKIP control that is available for the whole lesson. It
-     * is deliberately understated (small, tertiary colour, top-left, away from
-     * the ball's approach path down the middle) so it does not pull the eye off
-     * the thing the lesson is trying to teach. */
-    createSkipButton() {
-        const skip = UI.button(this, {
-            x: 92, y: 44, w: 120, h: 40,
-            label: 'SKIP',
-            textSize: UI.TYPE.small,
-            fillTop: 0x2b3948, fillBottom: 0x1d2833,
-            border: 0x54687d,
-            radius: 12,
-            depth: 62,
-            onClick: () => this.skipLesson()
-        });
-        this.skipBtn = skip;
-    }
-
-    skipLesson() {
-        // Jump straight to the results. Any pending timers, tweens and the
-        // spotlight are cleared so nothing fires on top of the summary.
-        this.phase = 'skipped';
-        this.awaitingHit = false;
-        this.shots = 0;
-        this.physics.pause();
-        this.clearHint();
-        this.spotOff();
-        this.tweens.killAll();
-        this.time.removeAllEvents();
-        if (this.dim) this.dim.destroy();
-        this.physics.resume();
-        this.showResults();
     }
 
     /** Stop the ball dead without pausing the rest of the world. */

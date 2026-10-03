@@ -122,7 +122,7 @@ class LeaderboardScene extends Phaser.Scene {
          * M2: the shared red X, so closing is in the same place on every
          * sub-screen. Was a bottom-centre BACK, one of three different close
          * patterns in the game. */
-        UI.closeButton(this, { x: 1240, y: 40, r: 22, onClick: () => this.scene.start('MenuScene') });
+        UI.closeButton(this, { x: UI.CLOSE_X, y: UI.CLOSE_Y, r: 22, onClick: () => this.scene.start('MenuScene') });
 
         this.events.on('shutdown', () => {
             this.input.keyboard.removeAllKeys(true);

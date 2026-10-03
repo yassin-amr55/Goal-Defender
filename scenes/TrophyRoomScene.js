@@ -50,7 +50,7 @@
 
         /* M2: shared red X instead of a bottom-centre BACK. */
         UI.closeButton(this, {
-            x: 1240, y: 40, r: 22,
+            x: UI.CLOSE_X, y: UI.CLOSE_Y, r: 22,
             onClick: () => this.scene.start('TournamentMenuScene')
         });
 

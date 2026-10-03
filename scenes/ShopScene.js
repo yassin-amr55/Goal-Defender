@@ -119,7 +119,7 @@
          * is now just PREV / PAGE / NEXT centred - one alignment instead of a
          * BACK floating on the left next to a centred pager. */
         UI.closeButton(this, {
-            x: 1240, y: 40, r: 22,
+            x: UI.CLOSE_X, y: UI.CLOSE_Y, r: 22,
             onClick: () => this.scene.start('MenuScene')
         });
 

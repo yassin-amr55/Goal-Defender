@@ -311,26 +311,25 @@
         this.bestRunDeflections = parseInt(localStorage.getItem('goalDefenderBestRunDeflections') || '0', 10);
         this.bestRunPerfects = parseInt(localStorage.getItem('goalDefenderBestRunPerfects') || '0', 10);
 
-        /* S8: the three HUD readouts sat directly on the stadium with no backing,
-         * in three different colours - white, gold, and green. Green is this
-         * game's "active/on" colour for every toggle, so a "Speed Boost: 0%"
-         * readout in green read as an enabled switch rather than a value.
+        /* HUD: three readouts, no backing panel.
          *
-         * They now sit on a soft scrim and share one label colour and one value
-         * colour, so the three lines read as a single panel of numbers. The
-         * values stay coloured where the colour MEANS something (the hitbox
-         * warning goes gold, the perfect counter goes green) but the neutral
-         * readouts do not. */
-        this.hudScrim = this.add.graphics();
-        this.hudScrim.fillStyle(0x0b1220, 0.42);
-        this.hudScrim.fillRoundedRect(10, 10, 330, 116, 12);
-
+         * A soft dark scrim sat behind these for a while so the text would read
+         * over the stadium art, and it was removed again on request - it showed
+         * as a visible grey slab in the corner of every frame of every run, which
+         * looked like a rendering artefact rather than a design choice.
+         *
+         * Legibility is carried entirely by the outline, which is now heavier
+         * than it was: at 5-6px of black the text holds up against both the bright
+         * sky and the dark stands without any plate behind it. The speed readout
+         * is also no longer green - green is this game's "active" colour for every
+         * toggle, so "Speed Boost: 0%" in green read as an enabled switch rather
+         * than a value. */
         this.scoreText = this.add.text(24, 28, 'Score: 0', {
             fontSize: UI.TYPE.lead + 'px',
             color: '#ffffff',
             fontStyle: '900',
             stroke: '#000000',
-            strokeThickness: 4
+            strokeThickness: 6
         });
 
         // Add countdown text for hitbox shrinking
@@ -339,7 +338,7 @@
             color: '#ffd45e',
             fontStyle: '800',
             stroke: '#000000',
-            strokeThickness: 3
+            strokeThickness: 5
         });
 
         // Add speed boost text
@@ -349,7 +348,7 @@
             color: '#e6eef7',
             fontStyle: '800',
             stroke: '#000000',
-            strokeThickness: 3
+            strokeThickness: 5
         });
 
         // Initialize game over flag
@@ -478,19 +477,26 @@
                 this.scoreMultiplier = 3; // +3 score per deflect
                 break;
             case 'void':
-                /* Brutal from the first hit, but the ball never gets quick.
+                /* Starts at the minimum hitbox with no room to shrink.
                  *
-                 * Starts at the minimum hitbox with no room to shrink, so the
-                 * ceiling is what makes it survivable at all. That ceiling was
-                 * raised from 150% to 170%: at 150% the ball spent so long at
-                 * its slowest that the run had no shape - you were tapping a
+                 * The 170% ceiling is what makes it survivable at all. It was
+                 * raised from 150% to 170% because at 150% the ball spent so long
+                 * at its slowest that the run had no shape - you were tapping a
                  * crawling ball into a shrinking target. 170% still ends far
-                 * below the default 300%, so the trade is intact, but the
-                 * middle of the run now has some pace to it. */
+                 * below the default 300%, so the trade is intact.
+                 *
+                 * It ALSO used to set boostStepMain to 1.02 and boostStepLate to
+                 * 1.01, halving the per-hit speed climb. Nothing in the shop copy
+                 * said so - the description reads only "Hitbox starts min, max
+                 * speed 170%" - so a player buying it at $100,000 got a third
+                 * undisclosed advantage on top of starting at the minimum
+                 * hitbox. That is not a trade, it is simply overpowered.
+                 *
+                 * It now uses the default 1.04 / 1.02. The two things the player
+                 * was actually told about - minimum hitbox from the first hit, and
+                 * a 170% ceiling - are the entire trade. */
                 this.startHitboxMin = true;
                 this.maxSpeedBoost = 170;
-                this.boostStepMain = 1.02;
-                this.boostStepLate = 1.01;
                 break;
             case 'gauntlet':
                 // Easy to hit and scores hugely, but can never go fast.

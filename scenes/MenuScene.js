@@ -323,7 +323,7 @@
         }).setOrigin(0, 0.5).setDepth(50);
 
         const self = this;
-        function paint(text, signedIn) {
+        function paint(text, signedIn, hover) {
             const label = self.accountLabel;
             label.setText(text);
 
@@ -333,7 +333,8 @@
 
             label.x = left + padX + glyphW + gap;
             label.y = cy;
-            label.setColor(signedIn ? '#ffd45e' : '#ffffff');
+            label.setColor(signedIn ? (hover ? '#ffe9a8' : '#ffd45e') : (hover ? '#e8f0f8' : '#ffffff'));
+            self.accountSignedIn = signedIn;
 
             const g = self.accountPill;
             g.clear();
@@ -344,12 +345,12 @@
             g.fillGradientStyle(0x22334a, 0x22334a, 0x101a26, 0x101a26, 1);
             g.fillRoundedRect(left, cy - h / 2, w, h, h / 2);
             // Border: gold when signed in, neutral when not.
-            g.lineStyle(2, signedIn ? 0xf0b429 : 0x54687d, 1);
+            g.lineStyle(2, signedIn ? (hover ? 0xffd45e : 0xf0b429) : (hover ? 0x8ea6bd : 0x54687d), 1);
             g.strokeRoundedRect(left, cy - h / 2, w, h, h / 2);
 
             // Person glyph: head + shoulders, centred in its own column.
             const gx = left + padX + glyphW / 2;
-            const gc = signedIn ? 0xffd45e : 0xb9c9da;
+            const gc = signedIn ? (hover ? 0xffe9a8 : 0xffd45e) : (hover ? 0xd6e2ee : 0xb9c9da);
             const gl = self.accountGlyph;
             gl.clear();
             gl.fillStyle(gc, 1);
@@ -369,17 +370,26 @@
         this.accountZone.setInteractive({ useHandCursor: true });
         this.accountZone.setDepth(51);
         this.accountZone.on('pointerdown', () => this.scene.start('AccountScene'));
-        this.accountZone.on('pointerover', () => {
-            this.tweens.add({ targets: this.accountZone, scale: 1.04, duration: 110, ease: 'Quad.easeOut' });
-            this.tweens.add({ targets: [this.accountLabel, this.accountPill, this.accountGlyph], scale: 1.04, duration: 110, ease: 'Quad.easeOut' });
+        /* No hover animation here.
+         *
+         * Every other control in the game grows 4-8% on hover, which is what
+         * makes them feel clickable. This one did too, and it was the one place
+         * it looked wrong: the pill is in the corner, it sits directly on top of
+         * the stadium art, and a scaling pill visibly jumps away from the edge
+ * it is aligned with.
+         *
+         * It still has a hover state - the border and label brighten - it just
+         * does not move. Alignment is worth more than the motion. */
+        var self2 = this;
+        this.accountZone.on('pointerover', function () {
+            self2.paintAccount(self2.accountLabel.text, self2.accountSignedIn, true);
         });
-        this.accountZone.on('pointerout', () => {
-            this.tweens.add({ targets: this.accountZone, scale: 1, duration: 110, ease: 'Quad.easeOut' });
-            this.tweens.add({ targets: [this.accountLabel, this.accountPill, this.accountGlyph], scale: 1, duration: 110, ease: 'Quad.easeOut' });
+        this.accountZone.on('pointerout', function () {
+            self2.paintAccount(self2.accountLabel.text, self2.accountSignedIn, false);
         });
 
         const signedIn = !!(window.GDAccount && window.GDAccount.isSignedIn());
-        paint(signedIn ? (window.GDAccount.username() || 'player') : 'SIGN IN', signedIn);
+        paint(signedIn ? (window.GDAccount.username() || 'player') : 'SIGN IN', signedIn, false);
         return this.accountLabel;
     }
 
@@ -395,7 +405,7 @@
         if (!A || !this.paintAccount) return;
         const signedIn = A.isSignedIn();
         const text = signedIn ? (A.username() || 'player') : 'SIGN IN';
-        this.paintAccount(text, signedIn);
+        this.paintAccount(text, signedIn, false);
         if (this.accountZone) {
             this.accountZone.width = (this.accountW || 200) + 12;
         }

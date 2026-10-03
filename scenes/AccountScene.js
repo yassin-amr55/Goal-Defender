@@ -21,7 +21,13 @@ class AccountScene extends Phaser.Scene {
     }
 
     init() {
-        this.tab = 'signup';
+        /* LOG IN is the landing tab, not SIGN UP.
+         *
+         * Almost everyone opening the account page already has an account and
+         * wants straight back in; making them hunt a small grey LOG IN link was
+         * a pointless extra tap for the common case. Signup is one click away
+         * behind a "DON'T HAVE AN ACCOUNT? SIGN UP" button. */
+        this.tab = 'login';
         this.fields = {};
         this.tabObjects = [];
         this.tabTweens = [];
@@ -134,7 +140,7 @@ class AccountScene extends Phaser.Scene {
 
         /* M2: shared red X instead of a bottom-centre BACK. */
         UI.closeButton(this, {
-            x: 1240, y: 40, r: 22,
+            x: UI.CLOSE_X, y: UI.CLOSE_Y, r: 22,
             onClick: () => this.close()
         });
 
@@ -394,8 +400,8 @@ class AccountScene extends Phaser.Scene {
 
     renderSignup() {
         this.subtitle.setText('Save your progress and play on any device');
-        this.makeField('username', 'USERNAME', 252, { focus: true, maxLength: 14 });
-        this.makeField('password', 'PASSWORD', 330, { password: true });
+        this.makeField('username', 'USERNAME', 276, { focus: true, maxLength: 14 });
+        this.makeField('password', 'PASSWORD', 354, { password: true });
         this.makeField('confirm', 'CONFIRM PASSWORD', 408, { password: true });
 
         this.own(UI.button(this, {
@@ -413,8 +419,15 @@ class AccountScene extends Phaser.Scene {
         }));
     }
 
-    /* ---------------- LOG IN ---------------- */
-
+    /* ---------------- LOG IN ----------------
+     *
+     * This is the landing tab. It used to be SIGN UP, which is the wrong way
+     * round: almost everyone arriving here already has an account and wants to
+     * get back to playing. Being made to hunt for a "LOG IN" link in small grey
+     * text was a pointless extra tap for the majority case.
+     *
+     * The two forms are also now laid out identically - same field positions,
+     * same button rows - so switching between them does not move anything. */
     renderLogin() {
         this.subtitle.setText('Welcome back');
         this.makeField('username', 'USERNAME', 276, { focus: true, maxLength: 14 });
@@ -427,9 +440,11 @@ class AccountScene extends Phaser.Scene {
             onClick: () => this.submit()
         }));
 
+        /* Exactly the label that was asked for, and it is the only way into the
+         * signup form. */
         this.own(UI.button(this, {
             x: 640, y: 500, w: 400, h: 46,
-            label: 'NEED AN ACCOUNT? SIGN UP', textSize: 15,
+            label: "DON'T HAVE AN ACCOUNT? SIGN UP", textSize: 15,
             fillTop: 0x5a6b7d, fillBottom: 0x3d4b59, radius: 13,
             onClick: () => this.setTab('signup')
         }));
