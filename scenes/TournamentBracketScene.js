@@ -34,20 +34,20 @@ const EMPTY_FILL = 0x141f2c;
 
 /* Horizontal layout, computed rather than eyeballed.
  *
- * The previous version used 88px slots at x=290/394/498 with 16px gutters, so
- * the two slots of a match sat 32px apart on a 26px pill - a 6px gap, which made
- * them read as one blob - and left the team pills stranded 48px from the first
- * slot column. That combination is what made the bracket look broken.
+ * The field is INSETED 18px from the panel on both sides. It used to run
+ * 20..1260 with the outer team pills at 20..160 and 1120..1260 - flush against
+ * the panel border, so the 2px gold stroke and the pill's drop shadow broke
+ * straight through it and the round-of-16 column hung outside the box while
+ * 120px sat empty in the middle of the panel. 18px of margin absorbs the stroke
+ * and the shadow.
  *
- * Strict grid across the 20..1260 field:
+ *   38 +140 team |37| 84 qf |37| 84 sf |36| 84 fin |37| 126 champion
+ *      |37| 84 fin |37| 84 sf |37| 84 qf |37| 140 team                   -> 1242
  *
- *   20 +140 team |25| 84 qf |25| 84 sf |25| 84 fin |90| 126 champion
- *       |90| 84 fin |25| 84 sf |25| 84 qf |25| 140 team            -> 1260
- *
- * Every slot column is the same width and every gutter the same size, except the
- * wide ones either side of the champion where the two finalists converge. */
-const X_LT = 90, X_LQ = 227, X_LS = 336, X_LF = 445;
-const X_RF = 835, X_RS = 944, X_RQ = 1053, X_RT = 1190;
+ * Every slot column is the same width and every gutter 36-37px, apart from the
+ * champion sitting dead centre at 640. */
+const X_LT = 108, X_LQ = 257, X_LS = 378, X_LF = 498;
+const X_RF = 782, X_RS = 902, X_RQ = 1023, X_RT = 1172;
 
 /* Vertical, symmetric about CY.
  *
@@ -367,7 +367,9 @@ class TournamentBracketScene extends Phaser.Scene {
 
         const matches = this.bracket.roundOf32 || [];
         const W = 178, H = 28, R = 14;
-        const colX = [190, 470, 750, 1030];
+        /* Centred. These were [190,470,750,1030], which spans 101..1119 and puts
+         * the grid's centre at x=610 - 30px left of the panel's 640. */
+        const colX = [220, 500, 780, 1060];
         const startY = 206, rowH = 46;
 
         for (let c = 0; c < 4; c++) {
