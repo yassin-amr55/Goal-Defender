@@ -768,7 +768,7 @@ var cloudWatchTimer = 0;
          * player on their own account is untouched (owner === uid); a first-time
          * player is untouched (owner === ''); only a genuine account switch
          * wipes. */
-        clearForeignSave(user.uid);
+        var switched = clearForeignSave(user.uid);
 
         return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid).get()
             .then(function (snap) {
@@ -783,6 +783,12 @@ var cloudWatchTimer = 0;
                      * AFTER the merge so a failure part-way through cannot leave
                      * a save attributed to an account that never claimed it. */
                     stampSaveOwner(user.uid);
+                    /* Reload anything derived from the save in memory. Only
+                     * needed when a switch actually happened - reloading the
+                     * caches on an ordinary sign-in would be wasted work, and
+                     * skipping it also avoids discarding an unlock queued moments
+                     * earlier in the same session. */
+                    if (switched) invalidateCaches();
                     /* Seed the fingerprint from what we just read, so the
                      * watcher does not mistake this sign-in for an outside
                      * edit and "restore" the values it already applied. */
@@ -848,6 +854,7 @@ var cloudWatchTimer = 0;
                     .then(function () {
                         lastPushedSignature = signatureOf(name, readSave());
                         stampSaveOwner(user.uid);
+                        if (switched) invalidateCaches();
                         installCloudWatch();
                         /* A brand new account has just adopted this device's
                          * progress, so the old anonymous identity on the board
@@ -982,6 +989,32 @@ var cloudWatchTimer = 0;
      */
     var SAVE_OWNER_KEY = 'gdSaveOwnerUid';
 
+    /* Account-scoped keys that are deliberately NOT in SAVE_KEYS, so the wipe
+     * above does not reach them.
+     *
+     * SAVE_KEYS is the set that travels to the cloud, so it is the wrong list to
+     * ask "what belongs to this account?" - some of these are intentionally
+     * device-local, some were simply never added. Every key below was found by
+     * scanning the codebase for storage access and diffing against SAVE_KEYS,
+     * then checking whether it is account-scoped or device-scoped. The
+     * device-scoped ones (settings, gdPlayedOnMobile, the rename cooldown) are
+     * deliberately absent and must stay that way.
+     */
+    var ACCOUNT_SCOPED_LOCAL_KEYS = [
+        /* Trophy-room statistics. Written by TournamentVictoryScene, read by
+         * TrophyRoomScene. Both are account facts - cups won, goals scored - and
+         * neither was ever added to SAVE_KEYS, so the first account's trophy
+         * room was still on screen after switching to a second account that had
+         * never played a cup. */
+        'tournamentQualifiersStats',
+        'tournamentChampionsStats',
+        /* A pointer to this device's anonymous leaderboard row, so it can be
+         * retired once an account exists. Clearing it on a switch stops the
+         * incoming account from reaching for the previous account's row and
+         * deleting it. */
+        'gdAnonLeaderboardUid'
+    ];
+
     function saveOwner() {
         try { return localStorage.getItem(SAVE_OWNER_KEY) || ''; }
         catch (e) { return ''; }
@@ -1001,7 +1034,7 @@ var cloudWatchTimer = 0;
         if (!owner || owner === uid) return false;
 
         var wiped = 0;
-        SAVE_KEYS.forEach(function (k) {
+        SAVE_KEYS.concat(ACCOUNT_SCOPED_LOCAL_KEYS).forEach(function (k) {
             if (localStorage.getItem(k) !== null) {
                 localStorage.removeItem(k);
                 wiped++;
@@ -1014,6 +1047,34 @@ var cloudWatchTimer = 0;
         localStorage.setItem('goalDefenderEquippedBall', 'default');
         stampSaveOwner(uid);
         return wiped > 0;
+    }
+
+    /* Discard everything cached in memory that was derived from the save we just
+     * discarded.
+     *
+     * Clearing localStorage is not enough. achievements.js holds `unlocked` and
+     * `claimed` as module-level objects and isUnlocked()/isClaimed() read those
+     * objects, never storage - they were populated when the script first ran and
+     * nothing reloads the page on a switch. player.js caches `lastSubmitted`,
+     * the highest score already published, and isImprovement() compares against
+     * it, so the incoming account's first score would be judged "not an
+     * improvement" against the previous account's best and never reach the
+     * board at all.
+     *
+     * Called only when a switch actually wiped something, and after mergeSave()
+     * so the incoming account's restored achievements are what gets loaded. */
+    function invalidateCaches() {
+        try {
+            if (window.Achievements && typeof window.Achievements.hydrate === 'function') {
+                window.Achievements.hydrate();
+            }
+        } catch (e) { /* achievements unavailable: nothing cached to drop */ }
+
+        try {
+            if (window.GDPlayer && typeof window.GDPlayer.forgetSubmitted === 'function') {
+                window.GDPlayer.forgetSubmitted();
+            }
+        } catch (e) { /* leaderboard unavailable: nothing cached to drop */ }
     }
 
     function signOut() {

@@ -204,6 +204,33 @@
         localStorage.setItem(CLAIM_KEY, JSON.stringify(claimed));
     }
 
+    /* Re-read the unlocked and claimed sets from storage, discarding the
+     * in-memory copies.
+     *
+     * unlocked and claimed are module-level and isUnlocked()/isClaimed() read
+     * the OBJECT, not localStorage. Nothing reloads the page on sign-in or
+     * sign-out, so those objects were loaded once when the script first ran and
+     * then described whichever account was signed in at that moment, for the
+     * rest of the session. Sign out of one account and into another without
+     * refreshing, and the second account opened showing the first one's
+     * achievements - unlocked, unclaimed, ready to claim the rewards.
+     *
+     * This is deliberately NOT reset(). reset() empties both objects and then
+     * WRITES that empty state back to storage, which is correct for wiping an
+     * account and exactly wrong here: by the time an account switch calls this,
+     * mergeSave() has already restored the incoming account's achievements from
+     * the cloud, so writing {} back would destroy them.
+     *
+     * Call this after the save has been merged, never before. */
+    function hydrate() {
+        unlocked = loadKey(UNLOCK_KEY);
+        claimed = loadKey(CLAIM_KEY);
+        /* An unlock toast queued for the previous account must not surface over
+         * the new one's menu. */
+        toastQueue = [];
+        toastActive = false;
+    }
+
     function isUnlocked(id) {
         return !!unlocked[id];
     }
@@ -469,6 +496,9 @@
         markTutorialDone: markTutorialDone,
         addMoney: addMoney,
         fmt: fmt,
-        reset: reset
+        reset: reset,
+        /* Re-read unlocks from storage. Called on an account switch so the
+         * in-memory set cannot outlive the account that filled it. */
+        hydrate: hydrate
     };
 })();

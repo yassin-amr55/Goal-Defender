@@ -500,6 +500,21 @@ submit: submit,
          * injected once. Both resolve the same promise. */
         loadSdk: loadSdk,
         firestore: function () { return firestore; },
-        auth: function () { return window.firebase.auth(); }
+        auth: function () { return window.firebase.auth(); },
+
+        /* Drop the cached "already published" baseline.
+         *
+         * lastSubmitted is the highest score this browser has pushed, and
+         * isImprovement() compares against it, so it only ever ratchets upward.
+         * After an account switch the incoming account's first score was being
+         * judged against the PREVIOUS account's best: a second account scoring
+         * 120 could be told "not an improvement" against a first account's 900
+         * and never reach the board at all, which is how a player ends up
+         * invisible on the leaderboard.
+         *
+         * Called by account.js on a switch. Deliberately does not touch
+         * submissionsThisSession - that is a rate limit against a hostile
+         * client, not per-account state, and resetting it would be a freebie. */
+        forgetSubmitted: function () { lastSubmitted = null; }
     };
 })();
