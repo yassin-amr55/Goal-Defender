@@ -46,6 +46,24 @@ On the Go:	Complete a run on a phone	$150
 
 Reflex	10 perfect hits in a single run	$1,000
 
+BALL UPGRADES (future update, not started - full design in BALL-UPGRADES.md):
+
+add in md files for future update is to add upgrades to each ball that you can
+buy so you buy upgrades for each ball and could possibaly have diffrent look for
+upgrades and their could be upgrades that is same for multiple balls
+
+- upgrades are bought per ball
+- upgrades could have a different look at each tier
+- some upgrades are the same across multiple balls
+
+open questions when we get to it:
+1. are the shared upgrades per FAMILY of ball (safety/speed/score/economy/
+   physics) or for ALL balls?
+2. do upgrades apply in tournament matches or are they normalised there?
+3. tier looks: tint the existing art, or real new art (and for how many balls)?
+4. can a tier 1 be earned by playing instead of bought?
+5. are the ball prices still right once upgrades exist?
+
 
 
 ok that's all and before you start know everything needed read needed files then when you go make sure all new updates don't add a bug anywhere else and make sure if an update should affect somewhere else then update like the new ball should be counted in full rack achievment and backend must know it could be useful you know what i mean when you update something don't forget to update all other places that depend on it and now start this phase and don't push after

@@ -7,6 +7,7 @@ only ever one version of each.
 | File | What it is for |
 |---|---|
 | **DEVLOG-V2.2.md** | Player-facing release notes for V2.2 — title, genre, and what changed. |
+| **BALL-UPGRADES.md** | **Planned per-ball upgrade system.** Not started — design only. Five things that will break the build if not handled first. |
 | **DESCRIPTION.md** | What the game is, how it plays, every feature, every ball and ability. Start here. |
 | **HANDOVER.md** | The briefing for whoever (or whatever) picks this up next. Read this second. |
 | **STATE.md** | Exact current state of the working tree: what is committed, what is not, what must not be pushed. |
@@ -21,7 +22,7 @@ only ever one version of each.
 | **TOURNAMENT.md** | Tournament modes, brackets, cups, streaks. *(moved from repo root)* |
 | **TEST-RESULTS.md** | Full test log with measurements. *(moved from repo root)* |
 | **update-plan.md** | Long-range plan, parts 1–8 shipped, parts 9/9.2 proposals. *(moved from repo root)* |
-| **To-Do.md** | The task list that drove the current phase. *(moved from repo root)* |
+| **To-Do.md** | The task list that drove the current phase, plus un-started requests. *(moved from repo root)* |
 | **v2.1.md** | v2.1 release notes. *(moved from repo root)* |
 | **BETTER.md** | Improvement backlog. *(moved from repo root)* |
 
