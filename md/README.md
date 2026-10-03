@@ -6,6 +6,7 @@ only ever one version of each.
 
 | File | What it is for |
 |---|---|
+| **DEVLOG-V2.2.md** | Player-facing release notes for V2.2 — title, genre, and what changed. |
 | **DESCRIPTION.md** | What the game is, how it plays, every feature, every ball and ability. Start here. |
 | **HANDOVER.md** | The briefing for whoever (or whatever) picks this up next. Read this second. |
 | **STATE.md** | Exact current state of the working tree: what is committed, what is not, what must not be pushed. |
