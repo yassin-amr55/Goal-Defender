@@ -824,84 +824,111 @@
         });
     }
 
+    /* Where the winner of match `index` goes in the next round.
+     *
+     * A bracket is POSITIONAL: the winners of matches 0 and 1 meet in match 0 of
+     * the next round, the winners of matches 2 and 3 meet in match 1, and so on
+     * down. floor(index/2) picks the next-round match, index%2 picks which of its
+     * two slots the winner takes.
+     *
+     * Both of these used to place a winner into "the first empty slot it found",
+     * scanning the next round in index order, which is not the same thing.
+     *
+     * The visible symptom: the player is seeded into round-of-16 match 0, which
+     * the bracket draws on the LEFT. simulateOtherMatches() then filled every
+     * quarter-final slot from the other seven first-round matches, and the player
+     * was dropped into the single slot left over - quarter-final 3 - which the
+     * bracket draws on the RIGHT. You won on one side of the screen and appeared
+     * on the other, which read as the bracket being broken rather than as a
+     * bookkeeping shortcut.
+     *
+     * The formula holds for every transition. It also covers the final, which is
+     * a single match object rather than an array: semi-final 0's winner is the
+     * finals' team1 and semi-final 1's winner is its team2. */
+    advanceTarget(index) {
+        return {
+            match: Math.floor(index / 2),
+            slot: index % 2 === 0 ? 'team1' : 'team2'
+        };
+    }
+
+    /** Write `team` into the slot that match `index` of `round` actually feeds. */
+    placeAdvancer(bracket, round, index, team) {
+        const list = Array.isArray(bracket[round])
+            ? bracket[round]
+            : (bracket[round] ? [bracket[round]] : null);
+        if (!list) return false;
+
+        const t = this.advanceTarget(index);
+        const dest = list[t.match];
+        if (!dest || dest[t.slot] !== 'TBD') return false;
+
+        dest[t.slot] = team;
+        return true;
+    }
+
     updateBracketWithVictory(currentRound) {
         // Load current bracket
         const bracket = JSON.parse(localStorage.getItem('tournamentBracket') || '{}');
         const playerTeam = localStorage.getItem('tournamentTeamName') || 'Your Team';
 
-        // Find player's match in current round and mark as won
-        if (bracket[currentRound]) {
-            const matches = Array.isArray(bracket[currentRound]) ? bracket[currentRound] : [bracket[currentRound]];
-
-            for (let match of matches) {
-                if (match.team1 === playerTeam || match.team2 === playerTeam) {
-                    match.winner = playerTeam;
-                    break;
-                }
-            }
-        }
-
-        // Advance player to next round and simulate other matches
         const nextRound = this.getNextRound(currentRound);
-        if (nextRound && bracket[nextRound]) {
-            // Simulate other matches in current round (advance random teams)
-            this.simulateOtherMatches(bracket, currentRound, playerTeam);
+        const played = this.playerMatchIndex(bracket, currentRound, playerTeam);
 
-            // Find empty slot in next round and place player
-            const nextMatches = Array.isArray(bracket[nextRound]) ? bracket[nextRound] : [bracket[nextRound]];
+        // Mark the player's match won. Without an index we cannot know where the
+        // winner goes, so nothing is advanced rather than guessing.
+        if (played >= 0) {
+            const matches = Array.isArray(bracket[currentRound])
+                ? bracket[currentRound] : [bracket[currentRound]];
+            matches[played].winner = playerTeam;
 
-            for (let match of nextMatches) {
-                if (match.team1 === 'TBD') {
-                    match.team1 = playerTeam;
-                    break;
-                } else if (match.team2 === 'TBD') {
-                    match.team2 = playerTeam;
-                    break;
-                }
+            if (nextRound && bracket[nextRound]) {
+                // Simulate the matches the player was not in, then take this
+                // player's own slot. Order no longer matters - both use the
+                // positional mapping, so they cannot land in each other's way.
+                this.simulateOtherMatches(bracket, currentRound, playerTeam);
+                this.placeAdvancer(bracket, nextRound, played, playerTeam);
+            } else if (!nextRound && bracket.finals) {
+                // Winning the final: record the champion. Without this the
+                // bracket kept showing an empty trophy slot after the tournament
+                // was won.
+                bracket.finals.winner = playerTeam;
             }
-        } else if (!nextRound && bracket[nextRound] === undefined && bracket.finals) {
-            // Winning the final: record the champion. Without this the bracket
-            // kept showing an empty trophy slot after the tournament was won.
-            bracket.finals.winner = playerTeam;
         }
 
         // Save updated bracket
         localStorage.setItem('tournamentBracket', JSON.stringify(bracket));
     }
 
+    /** Index of the match the player is in this round, or -1. */
+    playerMatchIndex(bracket, round, playerTeam) {
+        if (!bracket[round]) return -1;
+        const matches = Array.isArray(bracket[round]) ? bracket[round] : [bracket[round]];
+        for (let i = 0; i < matches.length; i++) {
+            if (matches[i].team1 === playerTeam || matches[i].team2 === playerTeam) return i;
+        }
+        return -1;
+    }
+
     simulateOtherMatches(bracket, currentRound, playerTeam) {
-        // Simulate other matches in the current round by randomly selecting winners
-        if (bracket[currentRound]) {
-            const matches = Array.isArray(bracket[currentRound]) ? bracket[currentRound] : [bracket[currentRound]];
-            const nextRound = this.getNextRound(currentRound);
+        if (!bracket[currentRound]) return;
 
-            for (let match of matches) {
-                // Skip player's match (already handled)
-                if (match.team1 === playerTeam || match.team2 === playerTeam) continue;
+        const matches = Array.isArray(bracket[currentRound])
+            ? bracket[currentRound] : [bracket[currentRound]];
+        const nextRound = this.getNextRound(currentRound);
+        if (!nextRound || !bracket[nextRound]) return;
 
-                // Skip if already has winner
-                if (match.winner) continue;
+        for (let i = 0; i < matches.length; i++) {
+            const match = matches[i];
 
-                // Randomly select winner from the two teams
-                if (match.team1 !== 'TBD' && match.team2 !== 'TBD') {
-                    match.winner = Math.random() < 0.5 ? match.team1 : match.team2;
+            // Skip the player's match, and any match already decided. Replaying a
+            // round must not re-run the simulation or overwrite a result.
+            if (match.team1 === playerTeam || match.team2 === playerTeam) continue;
+            if (match.winner) continue;
+            if (match.team1 === 'TBD' || match.team2 === 'TBD') continue;
 
-                    // Advance winner to next round
-                    if (nextRound && bracket[nextRound]) {
-                        const nextMatches = Array.isArray(bracket[nextRound]) ? bracket[nextRound] : [bracket[nextRound]];
-
-                        for (let nextMatch of nextMatches) {
-                            if (nextMatch.team1 === 'TBD') {
-                                nextMatch.team1 = match.winner;
-                                break;
-                            } else if (nextMatch.team2 === 'TBD') {
-                                nextMatch.team2 = match.winner;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            match.winner = Math.random() < 0.5 ? match.team1 : match.team2;
+            this.placeAdvancer(bracket, nextRound, i, match.winner);
         }
     }
 
