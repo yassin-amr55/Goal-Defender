@@ -78,13 +78,16 @@
              * rendered in order and the runtime guard below refuses to boot on an
              * unsorted ladder, so a price change here is a reorder too.
              *
-             * Its ability text now states the boost per hit instead of
-             * "Speed increases 50% slower". That phrasing was a double negative
-             * that never mentioned the boost, and its "50%" collided visually with
-             * Ice Ball's "Hitbox shrinks 50% slower" three rows above. The boost
-             * was always +2% per hit (boostStepMain 1.02); the copy just never
-             * said so. */
-            { id: 'anchor', name: 'Anchor Ball', price: 20000, ability: 'Speed boost +2% per hit, half base speed', texture: 'ball_anchor' },
+             * Its ability text states the boost per hit. It used to read "Speed
+             * increases 50% slower" - a double negative that never mentioned the
+             * boost, and whose "50%" collided with Ice Ball's "Hitbox shrinks 50%
+             * slower" three rows above.
+             *
+             * It also used to claim "half base speed", which was true and is now
+             * false: Anchor's base speed is normal and only the boost rate is
+             * halved. Do not put that clause back without also restoring
+             * speedMultiplier = 0.5, which is what made the ball crawl. */
+            { id: 'anchor', name: 'Anchor Ball', price: 20000, ability: 'Speed boost +2% per hit, half the usual rate', texture: 'ball_anchor' },
             { id: 'money', name: 'Money Ball', price: 24500, ability: 'Earns $5 per deflect instead of $3', texture: 'ball_money' },
             { id: 'spark', name: 'Spark Ball', price: 30000, ability: 'Max speed boost 210%', texture: 'ball_spark' },
             { id: 'candy', name: 'Candy Ball', price: 50000, ability: '+3 score per deflect', texture: 'ball_candy' },

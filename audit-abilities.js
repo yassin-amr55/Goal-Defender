@@ -45,6 +45,7 @@ const FIELDS = [
     'speedMultiplier', 'hitboxShrinkMultiplier', 'scoreMultiplier',
     'minHitboxMultiplier', 'maxSpeedBoost', 'jumpMultiplier',
     'boostStepMain', 'boostStepLate', 'startHitboxMin',
+    'fixedHitboxPct',
     'scoreRate', 'revivesLeft'
 ];
 
@@ -97,6 +98,7 @@ const CLAIMS = [
     { re: /Min hitbox (\d+)%/, field: 'minHitboxMultiplier' },
     { re: /max speed (\d+)%/, field: 'maxSpeedBoost' },
     { re: /Speed boost \+([\d.]+)% per hit/, field: 'boostStepMain' },
+    { re: /Hitbox stays (\d+)%/, field: 'fixedHitboxPct' },
     { re: /\+(\d+) score per deflect/, field: 'scoreMultiplier' },
     { re: /earns \$(\d+) per score/, field: 'scoreRate' },
     { re: /Saves you once/, field: 'revivesLeft' },
@@ -137,27 +139,48 @@ console.log('\n--- advertised boost vs boostStepMain ---');
 
 /* boostStepMain for one ball: its own case block, else the default. */
 function boostStepFor(id) {
-    const at = loader.indexOf("case '" + id + "':");
-    if (at === -1) return 1.04;                       // not overridden = default
-    const next = loader.indexOf("case '", at + 1);
-    const block = loader.slice(at, next === -1 ? loader.length : next);
-    const m = block.match(/this\.boostStepMain\s*=\s*([\d.]+)/);
-    return m ? parseFloat(m[1]) : 1.04;
+    return fieldFor(id, 'boostStepMain', 1.04);
 }
 
-const pct = v => Math.round((v - 1) * 1000) / 10;    // 1.036 -> 3.6
+/* One field's value for one ball: its own case block, else the given default. */
+function fieldFor(id, field, fallback) {
+    const at = loader.indexOf("case '" + id + "':");
+    if (at === -1) return fallback;
+    const next = loader.indexOf("case '", at + 1);
+    const block = loader.slice(at, next === -1 ? loader.length : next);
+    const m = block.match(new RegExp('this\\.' + field + '\\s*=\\s*([\\d.]+)'));
+    return m ? parseFloat(m[1]) : fallback;
+}
+
+/* Two shapes, two conversions. A boost step of 1.036 is "+3.6%", because it is
+ * a growth multiplier applied to 1. A fixedHitboxPct of 1.5 is "150%", because
+ * it IS the fraction. Reading either with the other's formula is how a value
+ * ends up looking correct in a comment and wrong on screen. */
+const asPct = {
+    boostStepMain: v => Math.round((v - 1) * 1000) / 10,
+    fixedHitboxPct: v => Math.round(v * 1000) / 10
+};
+const defaults = { boostStepMain: 1.04, fixedHitboxPct: 0 };
+
 const mismatched = [];
 
 for (const id of Object.keys(byId)) {
-    const m = byId[id].ability.match(/Speed boost \+([\d.]+)% per hit/);
-    if (!m) continue;
-    const advertised = parseFloat(m[1]);
-    const actual = pct(boostStepFor(id));
-    const good = Math.abs(advertised - actual) < 0.001;
-    console.log('  ' + byId[id].name.padEnd(14) +
-        ('+' + advertised + '%').padEnd(8) +
-        'code +' + actual + '%   ' + (good ? 'match' : '*** MISMATCH ***'));
-    if (!good) mismatched.push(byId[id].name);
+    const claims = [
+        { re: /Speed boost \+([\d.]+)% per hit/, field: 'boostStepMain' },
+        { re: /Hitbox stays (\d+)%/, field: 'fixedHitboxPct' }
+    ];
+    for (const c of claims) {
+        const m = byId[id].ability.match(c.re);
+        if (!m) continue;
+        const advertised = parseFloat(m[1]);
+        const actual = asPct[c.field](fieldFor(id, c.field, defaults[c.field]));
+        const good = Math.abs(advertised - actual) < 0.001;
+        console.log('  ' + byId[id].name.padEnd(14) +
+            c.field.padEnd(15) +
+            (advertised + '%').padEnd(8) +
+            'code ' + actual + '%   ' + (good ? 'match' : '*** MISMATCH ***'));
+        if (!good) mismatched.push(byId[id].name + '/' + c.field);
+    }
 }
 
 console.log('\ncopy/code boost mismatches: ' + (mismatched.length ? mismatched.join(', ') : 'none'));
@@ -170,6 +193,42 @@ ok('Steel advertises its boost per hit, not "N% slower"',
     /id: 'steel'[^}]*ability: 'Speed boost \+3\.6% per hit/.test(shop));
 ok('Anchor costs $20,000',
     /id: 'anchor'[^}]*price: 20000/.test(shop));
+
+/* Two shape bugs that both shipped, found by playing rather than by reading.
+ * Neither is a value the copy can catch, so both need pinning here. */
+function caseBlock(id) {
+    const at = loader.indexOf("case '" + id + "':");
+    if (at === -1) return '';
+    const next = loader.indexOf("case '", at + 1);
+    return loader.slice(at, next === -1 ? loader.length : next);
+}
+
+ok('Anchor does NOT halve the ball actual speed',
+    !/this\.speedMultiplier\s*=/.test(caseBlock('anchor')),
+    'speedMultiplier 0.5 made the ball crawl; only the boost rate is halved');
+ok('Anchor copy makes no base-speed claim',
+    !/id: 'anchor'[^}]*ability: '[^']*base speed/.test(shop),
+    'the ball has a normal base speed, so claiming otherwise is a lie');
+ok('a pinned hitbox is a FRACTION of the ball, not a pixel count',
+    /this\.fixedHitboxPct = 1\.5/.test(loader) && !/this\.fixedHitbox\s*=/.test(loader),
+    'fixedHitbox = 150 was read as pixels: 150px on a 51.2px ball is 293%, not the advertised 150%');
+/* Strip comments before any "this identifier must not appear" test. The
+ * GameScene comments deliberately quote the old buggy code (`fixedHitbox = 150`)
+ * to explain what was wrong, so a raw text search finds the explanation and
+ * reports it as a live reference. */
+function stripComments(src) {
+    return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+}
+const gameCode = stripComments(game);
+
+ok('the pinned hitbox is applied after the ball exists',
+    /this\.minHitboxRadius = \(this\.ball\.displayWidth \/ 2\)[\s\S]{0,600}?if \(this\.fixedHitboxPct\)/.test(gameCode),
+    'the timer block runs before the ball sprite, so it has no size to scale against');
+ok('every live reference to the pinned hitbox uses the percentage field',
+    !/fixedHitbox(?!Pct)/.test(gameCode),
+    'a stray fixedHitbox reference would silently pin the hitbox to nothing');
+ok('the pinned hitbox is scaled from the ball, not a literal radius',
+    /this\.hitboxRadius = \(this\.ball\.displayWidth \/ 2\) \* this\.fixedHitboxPct/.test(gameCode));
 
 if (fail || mismatched.length) {
     console.log('\n' + (fail + mismatched.length) + ' FAILED');

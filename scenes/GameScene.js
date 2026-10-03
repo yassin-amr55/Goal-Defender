@@ -68,18 +68,21 @@
          *
          * Skipped entirely for the Inverted Ball, whose hitbox is pinned. Not
          * starting the timer is enough - shrinkHitbox() is left untouched, so
-         * every other ball keeps the single code path. */
-        if (!this.fixedHitbox) {
+         * every other ball keeps the single code path.
+         *
+         * There is deliberately no `else` clause setting a pinned radius here.
+         * This block runs before the ball sprite exists, so there is no ball
+         * size to scale against - which is exactly why it used to hardcode
+         * `fixedHitbox = 150` as PIXELS. On a 51.2px-radius ball that is a 293%
+         * hitbox wearing a "150%" label. The pinned radius is applied further
+         * down, right after minHitboxRadius, where the real size is known. */
+        if (!this.fixedHitboxPct) {
             this.time.addEvent({
                 delay: 20000, // 20 seconds
                 callback: this.shrinkHitbox,
                 callbackScope: this,
                 loop: true
             });
-        } else {
-            this.hitboxRadius = this.fixedHitbox;
-            this.hitboxCircle.setRadius(this.hitboxRadius);
-            this.shrinkCountdown = -1;   // no countdown: the size never changes
         }
 
         /* PHASE 5: Countdown timer (updates every second).
@@ -89,7 +92,7 @@
          * about something that never happens: it counted down past zero, then
          * reset to 20, and the HUD displayed a nonsense countdown for the whole
          * run while the hitbox sat unchanged. */
-        if (!this.fixedHitbox) {
+        if (!this.fixedHitboxPct) {
             this.time.addEvent({
                 delay: 1000, // 1 second
                 callback: () => {
@@ -230,6 +233,25 @@
 
             // Set minimum hitbox size to ball size (affected by ball ability)
             this.minHitboxRadius = (this.ball.displayWidth / 2) * this.minHitboxMultiplier;
+
+            /* The Inverted Ball's hitbox never shrinks, so it is pinned to a fixed
+             * FRACTION of the ball rather than to a pixel count.
+             *
+             * It used to be pinned to 150 pixels, at a point where the ball did
+             * not exist yet so there was nothing to scale against. The ball is a
+             * 512px texture at scale 0.2, so its radius is 51.2px and a 150px
+             * hitbox is 293% of the ball - while the shop card said "Hitbox stays
+             * 150%". The player got a target three times the size they were told
+             * they would get.
+             *
+             * This is the first point in create() where the ball's real display
+             * size exists, which is why the pinned radius is applied here rather
+             * than with the timers above. */
+            if (this.fixedHitboxPct) {
+                this.hitboxRadius = (this.ball.displayWidth / 2) * this.fixedHitboxPct;
+                this.hitboxCircle.setRadius(this.hitboxRadius);
+                this.shrinkCountdown = -1;   // no countdown: the size never changes
+            }
 
             // Void Ball starts with the hitbox already fully shrunk
             if (this.startHitboxMin) {
@@ -401,7 +423,7 @@
          * exactly as before. Getting this wrong is how a "cosmetic" ball ends
          * up secretly changing the payout. */
         // Hitbox pinned to a fixed size instead of shrinking (Inverted).
-        this.fixedHitbox = 0;
+        this.fixedHitboxPct = 0;
         // Dead-centre taps award bonus score (Focus).
         this.perfectRadius = 0;
         this.perfectScore = 0;
@@ -455,38 +477,27 @@
                 this.hitboxShrinkMultiplier = 0.5; // Shrinks 50% slower
                 break;
             case 'anchor':
-                /* Half speed, and the speed builds at half rate.
+                /* Normal speed, but the boost builds at half rate.
                  *
-                 * Two separate levers, both at 50%:
-                 *   speedMultiplier 0.5 - half the base speed, so every speed in
-                 *     the run is half the default's (150 vs 300 at the start,
-                 *     441 vs 883 at 110% boost). Because the boost MULTIPLIES the
-                 *     base rather than adding to it, this halves the peak too.
-                 *   boostStep halved - the boost climbs per TAP, so halving the
-                 *     step means twice as many taps to reach any given
-                 *     percentage: 40% at 10 taps becomes 20%, and 110% at 30
-                 *     taps becomes roughly 55%.
+                 * ONLY the boost is halved. speedMultiplier stays at its default
+                 * 1.0, and that is the whole point of the ball: the ball moves at
+                 * exactly the speed it always did, and what changes is how fast
+                 * that speed builds.
                  *
-                 * The 300% ceiling is unchanged, so the ball can still reach
-                 * top speed - it just takes about twice the taps.
+                 * This had speedMultiplier = 0.5 as well, halving the ball's
+                 * ACTUAL speed for the entire run - 150 instead of 300 at the
+                 * start, and half the peak too, because the boost multiplies the
+                 * base rather than adding to it. So the ball crawled, which is not
+                 * a trade-off so much as a worse game: it made early taps easy and
+                 * late ones impossible, and the shop copy "Speed increases 50%
+                 * slower" gave no hint that the ball itself was crawling.
                  *
-                 * ON THE SHOP TEXT. This has always been +2% per hit, never the
-                 * default +4% - boostStepMain below is 1.02 and has been all
-                 * along. The copy is what was wrong: it read "Speed increases
-                 * 50% slower", a double negative that never mentioned the boost,
-                 * whose "50%" also collided visually with Ice Ball's "Hitbox
-                 * shrinks 50% slower" three rows above it. A player reading that
-                 * had no way to tell what the ball actually did.
-                 *
-                 * It now reads "Speed boost +2% per hit, half base speed", which
-                 * states both levers as numbers. audit-abilities.js cross-checks
-                 * that stated +2% against this assignment, so the copy cannot
-                 * drift from the code again.
-                 *
-                 * The price went from $6,000 to $20,000 for the same reason the
-                 * copy did: half speed for the whole run is a large, permanent
-                 * difficulty cut, and $6,000 bought it very early. */
-                this.speedMultiplier = 0.5;
+                 * boostStep halved means the boost climbs per TAP, so halving the
+                 * step means twice as many taps to reach any given percentage:
+                 * 40% at 10 taps becomes 20%, and 110% at 30 taps becomes roughly
+                 * 55%. The 300% ceiling is unchanged - the ball can still reach
+                 * top speed, it just takes about twice the taps, which is what
+                 * the card now says. */
                 this.boostStepMain = 1.02;   // +2% per hit instead of +4%
                 this.boostStepLate = 1.01;   // +1% past 100% instead of +2%
                 break;
@@ -584,8 +595,14 @@
                  * either. Neither is a buff on its own: an unshrinkable hitbox
                  * alone would be strictly easier than the default, but pairing
                  * it with a hard speed ceiling removes the skill ceiling too,
-                 * so the run is long and safe rather than escalating. */
-                this.fixedHitbox = 150;
+                 * so the run is long and safe rather than escalating.
+                 *
+                 * fixedHitboxPct is a FRACTION, matching how minHitboxMultiplier
+                 * expresses every other ball. It used to be `fixedHitbox = 150`,
+                 * read as a pixel radius and applied before the ball sprite
+                 * existed - which gave a 150px hitbox on a 51.2px ball, or 293%
+                 * of it, while the card claimed 150%. */
+                this.fixedHitboxPct = 1.5;
                 this.minHitboxMultiplier = 1.5;
                 this.maxSpeedBoost = 150;
                 break;
@@ -1130,7 +1147,7 @@
 
         // Update countdown text
         if (this.countdownText) {
-            if (this.fixedHitbox) {
+            if (this.fixedHitboxPct) {
                 /* The Inverted Ball's hitbox never changes, so there is nothing
                  * to count down. Say that plainly instead of showing a
                  * countdown to a shrink that will never happen. */
