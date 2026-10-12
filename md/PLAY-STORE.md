@@ -21,7 +21,7 @@ Prepared 2026-10-12. One thing needs your action before this can be uploaded.
 
 ```
 package      com.dailyapps.goaldefender
-versionCode  1
+versionCode  2
 versionName  2.2
 minSdk       24          (Android 7.0)
 targetSdk    36          (Android 16)
@@ -31,15 +31,30 @@ signer SHA-256  35a1ef7714eef93c3ec7beea8a351aa27bf80852598edc8cbc31b6c66ccf5565
 
 Upload the **AAB**. Play splits it per device; the APK is for local install.
 
-### Play Console rejected the first upload — both issues are now fixed
+### ⚠️ versionCode must be bumped on EVERY upload
+
+Play burns a version code **permanently the moment it sees it** — even if a later
+validation step rejects the release. The targetSdk-35 bundle consumed code 1, so
+the retry failed with:
+
+> Version code 1 has already been used. Try another version code.
+
+Before every upload, increment `versionCode` in `android/app/build.gradle`. It is
+now **2**. Leave `versionName` at `2.2` — that is the human-facing label, and
+bumping it would falsely claim this is a different version of the game than the
+working tree actually holds.
+
+### Play Console rejected the first upload — all three issues are now fixed
 
 | Console said | Cause | Fix |
 |---|---|---|
 | **Error:** "must target at least API level 36" | `targetSdk 35` | bumped to 36 |
 | **Warning:** "no deobfuscation file" | `minifyEnabled false`, so AGP emitted no mapping | R8 enabled, mapping now bundled |
+| **Error:** "Version code 1 has already been used" | code 1 burned by the rejected build | bumped to 2 |
 
-The target-SDK error is a hard block; the deobfuscation warning was advisory but
-the fix is also correct, so both were done.
+The target-SDK error was a hard block and the version-code error is too; the
+deobfuscation warning was advisory, but the fix is also correct, so all three were
+done.
 
 `minifyEnabled true` + `shrinkResources true` also **shrank the APK from 6.67 MB
 to 4.78 MB** and the AAB to 5.10 MB. See `android/app/proguard-rules.pro` for why

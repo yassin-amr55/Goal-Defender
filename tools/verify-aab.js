@@ -55,19 +55,27 @@ ok('baseline profile bundled (lets Play deliver faster installs)',
  * aapt2 will not open a bundle at all. Protobuf keeps its strings in a pool as
  * length-prefixed literals, so the attribute value is still readable directly:
  *
- *   ... android:\u0010targetSdkVersion \u001a \u0002 "36" ...
- *                          ^ key       ^len 2  ^value
+ *   targetSdkVersion : 0x1a 0x02 '3' '6'      -> "36"
+ *   versionName      : 0x1a 0x03 '2' '.' '2'   -> "2.2"
  *
- * If the key ever moves, this reports 'unknown' and FAILS rather than passing
- * vacuously - a check that cannot see the thing it claims to check is worse than
- * no check, because it reports success. */
+ * So every attribute is: the key, a 0x1a tag byte, a length byte, then exactly
+ * that many value bytes. The length byte is the only thing that delimits the
+ * value.
+ *
+ * An earlier version of this matched digits followed by a quote instead. That
+ * appeared to work for targetSdkVersion and minSdkVersion purely by luck: the
+ * quote was the NEXT field's tag byte (0x22), not a terminator. It silently
+ * failed on versionName "2.2", whose next tag is 0x28. Reading the length byte
+ * is the only correct parse. */
 function protoAttrValue(buf, key) {
     const blob = Buffer.isBuffer(buf) ? buf.toString('latin1') : String(buf);
     const at = blob.indexOf(key);
     if (at < 0) return null;
-    const tail = blob.slice(at + key.length, at + key.length + 24);
-    const m = tail.match(/[\x00-\x0f](\d{1,3})"/);   // length-prefixed proto string
-    return m ? m[1] : null;
+    const tag = blob.charCodeAt(at + key.length);
+    const len = blob.charCodeAt(at + key.length + 1);
+    if (!(tag >= 0x10 && tag <= 0x1f)) return null;   // not a string-valued attribute
+    if (!(len >= 1 && len <= 32)) return null;        // implausible length: refuse rather than guess
+    return blob.substr(at + key.length + 2, len);
 }
 
 const manifest = execFileSync('tar', ['-xOf', AAB, 'base/manifest/AndroidManifest.xml'], { maxBuffer: MAXBUF });
@@ -78,6 +86,19 @@ ok('targets API 36 or higher (Play Console rejects lower)',
     targetSdk === null ? '*** could not read targetSdkVersion - check this script ***'
         : 'targetSdkVersion ' + targetSdk);
 ok('minimum SDK unchanged at 24', minSdk === '24', 'minSdkVersion ' + minSdk);
+
+/* Play burns a version code permanently the moment it sees one, even if a later
+ * validation step rejects the release. Code 1 is spent - the targetSdk-35 bundle
+ * consumed it - so Play now refuses anything that is not strictly greater. Only
+ * Play knows the true high-water mark, so this cannot prove a code is unused; it
+ * reports the code in the artifact so you can see what you are uploading, and it
+ * fails if the code ever drops back to 1 or below. */
+const versionCode = protoAttrValue(manifest, 'versionCode');
+const versionName = protoAttrValue(manifest, 'versionName');
+ok('version code is above the spent code 1', versionCode !== null && parseInt(versionCode, 10) > 1,
+    versionCode === null ? '*** could not read versionCode - check this script ***'
+        : 'versionCode ' + versionCode);
+ok('version name reads back as 2.2, matching UI.VERSION', versionName === '2.2', 'versionName ' + versionName);
 
 console.log('');
 console.log('=== game payload ===');
