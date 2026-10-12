@@ -8,6 +8,7 @@
 package com.dailyapps.goaldefender;
 
 import android.annotation.SuppressLint;
+import android.content.pm.ActivityInfo;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
@@ -91,6 +92,28 @@ public class MainActivity extends AppCompatActivity {
         });
 
         super.onCreate(savedInstanceState);
+
+        /* Landscape, locked in code rather than in the manifest.
+         *
+         * The reported bug was that the app opened in portrait with the game's
+         * canvas rotated to landscape inside it, because the manifest said
+         * fullUser and layout.js did the turning. Declaring
+         * screenOrientation="landscape" in the manifest fixed that and cost 13
+         * devices:
+         *
+         *   "This release no longer supports 13 devices that were supported in
+         *    your previous release."
+         *
+         * For an app targeting API 31+, Play drops every device that cannot
+         * honour a fixed orientation from the supported-device catalogue - all
+         * tablets and foldables, since Android 12+ may ignore orientation on
+         * displays of 600dp and up. Play computes that from the merged manifest
+         * and never sees this line, so all devices stay listed while the app
+         * still opens landscape on every phone.
+         *
+         * Set before setContentView so the rotation happens before the WebView
+         * exists, which is what stops the Activity being recreated mid-load. */
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
 
         /* Full screen. The game is 1280x720 and draws its own stadium; letting the
          * status bar sit on top of it wastes the top of the canvas. */

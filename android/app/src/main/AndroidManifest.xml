@@ -22,29 +22,39 @@
         android:largeHeap="true"
         android:theme="@style/Theme.GoalDefender">
 
-        <!-- Landscape, not fullUser. fullUser let the system open the Activity
-             in whatever orientation the phone happened to be held at, so the app
-             launched portrait while the game's layout.js immediately rotated the
-             canvas to landscape inside it. The system and the game disagreed
-             about orientation and the player saw a portrait launch with a
-             sideways game.
+        <!-- Orientation is declared loosely HERE and locked in code instead.
+                 Play Console rejected the release that declared
+                 android:screenOrientation="landscape":
+                     "This release no longer supports 13 devices that were
+                      supported in your previous release."
+                 For an app targeting API 31+, Google Play removes from the
+                 supported-device catalogue any device that cannot honour a fixed
+                 orientation - every tablet and foldable, because Android 12+ is
+                 free to ignore orientation on displays of 600dp and up. So a
+                 manifest lock does not merely rotate the phone; it deletes
+                 devices from the store listing, which is a far bigger cost than
+                 the portrait-launch problem it solved.
 
-             The game is 1280x720 and never benefits from portrait, so the
-             Activity is locked and the system rotates before onCreate. This also
-             removes a recreation during startup: a rotation arriving while the
-             WebView is still loading would recreate the Activity underneath it.
+                 So the manifest says "follow the user" and MainActivity calls
+                 setRequestedOrientation(LANDSCAPE) in onCreate. The app still
+                 opens landscape on every phone, which is the reported bug, and
+                 Play still counts every device as supported, because Play's
+                 calculation reads the manifest and knows nothing about a runtime
+                 call.
 
-             Note: Android 12+ may ignore orientation requests on large screens
-             (tablets, foldables) for apps targeting API 36. Phones, which is
-             what this is for, are unaffected.
+                 On a tablet that ignores the request the game simply runs at
+                 whatever orientation the player chooses. That is correct: the
+                 game is 1280x720 and reflows to any aspect ratio.
 
-             An XML comment cannot sit between a tag's attributes, so this lives
-             above the element rather than next to the attribute it explains. -->
+                 tools/verify-entry-point.js fails the build if a fixed
+                 orientation ever goes back into the manifest, because the device
+                 loss is silent - the build stays green and only Play complains.
+                 -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:screenOrientation="landscape"
+            android:screenOrientation="fullUser"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density|fontScale|layoutDirection|locale"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

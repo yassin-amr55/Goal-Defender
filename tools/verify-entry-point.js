@@ -43,7 +43,9 @@ const { execFileSync } = require('child_process');
 const QUIET = process.argv.includes('--print-start-url');
 if (QUIET) { console.log = () => {}; console.error = () => {}; }
 
-const REPO = path.join(__dirname, '..');
+/* Overridable so the negative tests can point it at a deliberately broken copy
+ * and prove the check actually fails. */
+const REPO = process.env.GD_REPO || path.join(__dirname, '..');
 /* Overridable so tools/test-entry-point-catches-the-bug.js can point it at a
  * deliberately broken copy and prove the check actually fails. */
 const ACTIVITY = process.env.GD_ACTIVITY ||
@@ -210,6 +212,49 @@ if (fs.existsSync(apk)) {
     console.log('');
     console.log('note  APK not built yet at ' + apk + ' - only checking the source');
 }
+
+console.log('');
+console.log('=== orientation and device support ===');
+
+/* A fixed orientation in the manifest deletes devices from the Play listing.
+ *
+ * The build that declared screenOrientation="landscape" was rejected with:
+ *   "This release no longer supports 13 devices that were supported in your
+ *    previous release."
+ *
+ * For an app targeting API 31+, Play removes from the supported-device catalogue
+ * every device that cannot honour a fixed orientation - all tablets and
+ * foldables, since Android 12+ may ignore orientation on displays >= 600dp. The
+ * build stays perfectly green; only Play notices, and only after a release has
+ * been cut. So it is checked here, from the source, before that happens.
+ *
+ * The app still opens landscape: MainActivity calls setRequestedOrientation.
+ * Play reads the manifest and never sees that call, so both requirements hold. */
+const manifestPath = path.join(REPO, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+/* Comments are stripped first, for the same reason as in MainActivity: the
+ * comment explaining this very rule QUOTES the bad value
+ *
+ *     android:screenOrientation="landscape":
+ *
+ * and a regex over the raw file matches that example rather than the real
+ * attribute. It reported "landscape" for a manifest that said fullUser - a check
+ * confidently asserting the opposite of the truth, which is worse than no check.
+ * Always match against code, never against prose about the code. */
+const manifest = fs.readFileSync(manifestPath, 'utf8').replace(/<!--[\s\S]*?-->/g, ' ');
+const orient = (manifest.match(/android:screenOrientation\s*=\s*"([^"]*)"/) || [])[1];
+
+/* The fixed orientations are exactly the ones Play penalises. user, unspecified,
+ * fullUser, sensor and behind are all fine. */
+const FIXED = ['portrait', 'landscape', 'reversePortrait', 'reverseLandscape', 'sensorPortrait'];
+ok('manifest does NOT hard-lock orientation (Play drops tablets and foldables)',
+    orient !== undefined && !FIXED.includes(orient),
+    orient === undefined ? '*** no screenOrientation in the manifest - check this script ***'
+        : 'screenOrientation="' + orient + '"' + (FIXED.includes(orient) ? '  *** THIS COSTS DEVICES ***' : ''));
+
+const activitySrc = fs.readFileSync(ACTIVITY, 'utf8');
+ok('the app locks landscape at runtime instead',
+    /setRequestedOrientation\s*\(\s*ActivityInfo\.SCREEN_ORIENTATION_LANDSCAPE/.test(activitySrc),
+    'setRequestedOrientation(LANDSCAPE) in onCreate');
 
 console.log('');
 console.log('=== the file it points at is really in the APK ===');

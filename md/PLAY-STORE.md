@@ -41,12 +41,48 @@ validation step rejects the release.
 | 1 | rejected for targeting API 35 — but still burned |
 | 2 | installed on a device, showed the blank-screen bug below |
 | 3 | published to Play |
-| **4** | **current build** — keyboard, offline, login choice |
+| 4 | keyboard, offline play, login-time choice |
+| 5 | **rejected — "no longer supports 13 devices"** (see below) |
+| **6** | **current build** |
 
 Before every upload, increment `versionCode` in `android/app/build.gradle`. Leave
 `versionName` at `2.2` — that is the human-facing label, and bumping it would
 falsely claim this is a different version of the game than the working tree
 actually holds.
+
+### ⚠️ Never hard-lock orientation in the manifest
+
+Code 5 declared `android:screenOrientation="landscape"` to fix a portrait
+launch, and Play rejected it:
+
+> This release no longer supports 13 devices that were supported in your
+> previous release. If you proceed, your app will not be available to new users
+> on these unsupported devices, and updates will not be available to users who
+> already have your app installed on these devices.
+
+For an app targeting **API 31+**, Play removes from the supported-device
+catalogue every device that cannot honour a fixed orientation — all tablets and
+foldables, since Android 12+ may ignore orientation on displays of 600dp and up.
+A manifest lock doesn't just rotate the phone, it **deletes devices from the
+store listing**, which costs far more than the problem it solves.
+
+The fix keeps both requirements:
+
+| | where | why |
+|---|---|---|
+| `screenOrientation="fullUser"` | manifest | Play counts every device as supported |
+| `setRequestedOrientation(LANDSCAPE)` | `MainActivity.onCreate` | the app still opens landscape on phones |
+
+Play computes device support from the merged manifest and never sees the runtime
+call. On a tablet that ignores the request the game runs at whatever orientation
+the player chooses — correct, since it is 1280×720 and reflows to any aspect
+ratio.
+
+`tools/verify-entry-point.js` fails the build if a fixed orientation ever returns
+to the manifest, because this failure is invisible locally — the build stays
+green and only Play complains, after a release has been cut.
+`tools/test-orientation-guard.js` proves that guard rejects `landscape`,
+`portrait`, `sensorPortrait` and `reverseLandscape`.
 
 ## The game works offline
 

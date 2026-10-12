@@ -38,12 +38,13 @@ android {
          * matters because the whole shell depends on WebView behaviour. */
         minSdk 24
         targetSdk 36
-        /* 5. Play consumes a version code permanently the moment it sees it, even
+        /* 6. Play consumes a version code permanently the moment it sees it, even
          * if a later validation step rejects the release.
          *   1  burned by the build rejected for targeting API 35
          *   2  installed on a device, showed the blank-screen ERR_INVALID_RESPONSE
          *   3  published to Play
          *   4  keyboard, offline play and the login-time choice
+         *   5  rejected - "no longer supports 13 devices" (hard-locked orientation)
          *
          * Play requires a strictly greater integer every time, so this must be
          * bumped on every upload from here on, not just this one.
@@ -51,7 +52,7 @@ android {
          * versionName stays 2.2: that is the human-facing release label, and
          * bumping it would falsely claim this is a different version of the game
          * than the working tree actually holds. */
-        versionCode 5
+        versionCode 6
         versionName "2.2"
     }
 
