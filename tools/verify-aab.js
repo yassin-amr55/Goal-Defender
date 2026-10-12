@@ -40,6 +40,45 @@ ok('manifest is compiled protobuf, as bundles require',
     names.includes('base/manifest/AndroidManifest.xml') && fs.statSync(AAB).size > 0);
 ok('dex is bundled', names.some(n => /^base\/dex\/classes.*\.dex$/.test(n)));
 
+/* Play Console rejected the first upload over targetSdk, and warned over the
+ * missing deobfuscation file. Both are now checked here so neither can come
+ * back unnoticed on a later build. */
+console.log('');
+console.log('=== Play Console upload requirements ===');
+ok('deobfuscation file bundled (silences "no deobfuscation file" warning)',
+    names.includes('BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map'),
+    'R8 is on, so AGP writes the mapping into the bundle');
+ok('baseline profile bundled (lets Play deliver faster installs)',
+    names.some(n => /BUNDLE-METADATA\/com\.android\.tools\.build\.profiles\/.*\.profm?$/.test(n)));
+
+/* A bundle's manifest is compiled protobuf, so there is no plain XML to grep and
+ * aapt2 will not open a bundle at all. Protobuf keeps its strings in a pool as
+ * length-prefixed literals, so the attribute value is still readable directly:
+ *
+ *   ... android:\u0010targetSdkVersion \u001a \u0002 "36" ...
+ *                          ^ key       ^len 2  ^value
+ *
+ * If the key ever moves, this reports 'unknown' and FAILS rather than passing
+ * vacuously - a check that cannot see the thing it claims to check is worse than
+ * no check, because it reports success. */
+function protoAttrValue(buf, key) {
+    const blob = Buffer.isBuffer(buf) ? buf.toString('latin1') : String(buf);
+    const at = blob.indexOf(key);
+    if (at < 0) return null;
+    const tail = blob.slice(at + key.length, at + key.length + 24);
+    const m = tail.match(/[\x00-\x0f](\d{1,3})"/);   // length-prefixed proto string
+    return m ? m[1] : null;
+}
+
+const manifest = execFileSync('tar', ['-xOf', AAB, 'base/manifest/AndroidManifest.xml'], { maxBuffer: MAXBUF });
+const targetSdk = protoAttrValue(manifest, 'targetSdkVersion');
+const minSdk = protoAttrValue(manifest, 'minSdkVersion');
+ok('targets API 36 or higher (Play Console rejects lower)',
+    targetSdk !== null && parseInt(targetSdk, 10) >= 36,
+    targetSdk === null ? '*** could not read targetSdkVersion - check this script ***'
+        : 'targetSdkVersion ' + targetSdk);
+ok('minimum SDK unchanged at 24', minSdk === '24', 'minSdkVersion ' + minSdk);
+
 console.log('');
 console.log('=== game payload ===');
 const game = names.filter(n => n.startsWith('base/assets/'));

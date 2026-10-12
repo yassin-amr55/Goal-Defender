@@ -9,25 +9,55 @@ Prepared 2026-10-12. One thing needs your action before this can be uploaded.
 | Android wrapper project | `android/` — builds |
 | Package name | `com.dailyapps.goaldefender` ✓ |
 | Release keystore | generated, **gitignored** |
-| **Signed release APK** | `android/app/build/outputs/apk/release/app-release.apk`, 6.67 MB |
+| **Signed release APK** | `android/app/build/outputs/apk/release/app-release.apk`, 4.78 MB |
+| **Signed release AAB** | `android/app/build/outputs/bundle/release/app-release.aab`, 5.10 MB — **upload this** |
 | App icon (512×512 opaque) | `playstore/icon-512.png` |
 | Feature graphic (1024×500) | `playstore/feature-graphic-1024x500.png` |
 | Adaptive launcher icon | all 5 densities, art inside the 66dp safe zone |
 | 8 phone screenshots | `playstore/screenshots/`, 1280×720, 24-bit RGB |
 | Short + full description | `playstore/listing.md` |
-| AAB for Play upload | **not built — see below** |
 
-### The built APK
+### The built APK / AAB
 
 ```
 package      com.dailyapps.goaldefender
 versionCode  1
 versionName  2.2
 minSdk       24          (Android 7.0)
-targetSdk    35          (Android 15)
-size         6.67 MB
+targetSdk    36          (Android 16)
+size         4.78 MB APK / 5.10 MB AAB
 signer SHA-256  35a1ef7714eef93c3ec7beea8a351aa27bf80852598edc8cbc31b6c66ccf5565
 ```
+
+Upload the **AAB**. Play splits it per device; the APK is for local install.
+
+### Play Console rejected the first upload — both issues are now fixed
+
+| Console said | Cause | Fix |
+|---|---|---|
+| **Error:** "must target at least API level 36" | `targetSdk 35` | bumped to 36 |
+| **Warning:** "no deobfuscation file" | `minifyEnabled false`, so AGP emitted no mapping | R8 enabled, mapping now bundled |
+
+The target-SDK error is a hard block; the deobfuscation warning was advisory but
+the fix is also correct, so both were done.
+
+`minifyEnabled true` + `shrinkResources true` also **shrank the APK from 6.67 MB
+to 4.78 MB** and the AAB to 5.10 MB. See `android/app/proguard-rules.pro` for why
+this is safe: the app is one Activity with no reflection, so R8 has almost
+nothing it cannot see referenced.
+
+⚠️ `shrinkResources` **renames resource paths** — `res/layout/activity_main.xml`
+becomes something like `res/_G.xml`. That is normal and not a bug, but it means
+you cannot verify the APK by looking for resource filenames. Use the tools:
+
+```
+node tools/verify-aab.js <aab> <extracted-zip-dir> <repo-root>
+node tools/verify-r8-kept-what-it-needed.js <apk>
+node tools/test-verify-aab-targetsdk.js
+```
+
+The last one is a **negative test**: it proves the targetSdk assertion actually
+rejects 35 and 34, rather than passing vacuously.
 
 Save that fingerprint. Play shows it on the public listing, and it is how you
 prove a build is yours.
@@ -68,15 +98,24 @@ optional. `listing.md` has what to declare.
 
 ### 4. Build the upload bundle
 
-Play uploads an **AAB**, not an APK:
+Play uploads an **AAB**, not an APK. Both are already built and verified:
 
 ```
 cd android
-./gradlew bundleRelease
+./gradlew bundleRelease     # -> app/build/outputs/bundle/release/app-release.aab
 ```
 
-Not run here because it was not needed to prove the packaging works, and an AAB
-is only worth producing once the keystore has been rotated (step 2).
+Build output is gitignored, so if you lose it this one command rebuilds it.
+
+### 5. Verify before you upload
+
+Do not eyeball the artifacts — run the checkers. All three take seconds:
+
+```
+node tools/verify-upload.js --apk
+node tools/verify-aab.js android/app/build/outputs/bundle/release/app-release.aab <extracted-itch-zip> .
+node tools/verify-r8-kept-what-it-needed.js android/app/build/outputs/apk/release/app-release.apk
+```
 
 ---
 
@@ -93,9 +132,10 @@ full-screen game with no address bar and no navigation away from the app.
 
 ### Target API level
 
-`targetSdk 35` satisfies Play's requirement to target within a year of the
-latest release. Google will require 36 at some point; that is a one-line change
-in `app/build.gradle` plus an SDK install.
+`targetSdk 36` satisfies Play's requirement to target within a year of the latest
+release. Google will require 37 at some point; that is a one-line change in
+`app/build.gradle` plus an SDK install, and `compileSdk` must be raised to match.
+`tools/verify-aab.js` fails the build check if the bundle ever drops below 36.
 
 ---
 

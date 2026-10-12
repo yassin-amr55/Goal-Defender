@@ -23,7 +23,13 @@ def shippedScenes = [
 
 android {
     namespace 'com.dailyapps.goaldefender'
-    compileSdk 35
+    /* 36, not 35. Play Console rejected the 35 build outright:
+     *   "Your app currently targets API level 35 and must target at least API
+     *    level 36 to ensure it is built on the latest APIs optimized for
+     *    security and performance."
+     * Google requires new apps AND updates to target the current API level, so
+     * this is not negotiable and it will need bumping again next year. */
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.dailyapps.goaldefender"
@@ -31,9 +37,7 @@ android {
          * 24 is the floor where WebView is updatable via Play Store, which
          * matters because the whole shell depends on WebView behaviour. */
         minSdk 24
-        /* Play requires new apps and updates to target within a year of the
-         * latest stable release. 35 satisfies that today; bump deliberately. */
-        targetSdk 35
+        targetSdk 36
         versionCode 1
         versionName "2.2"
     }
@@ -61,8 +65,20 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false          // the game is already plain JS; nothing to shrink
-            shrinkResources false
+            /* R8 on. Play Console warned "There is no deobfuscation file
+             * associated with this App Bundle" because minifyEnabled was false and
+             * AGP therefore emitted no mapping file. The warning is advisory
+             * rather than a blocker, but the fix is also the right thing to do:
+             * with R8 enabled AGP writes the mapping into the bundle as
+             * BUNDLE-METADATA/com.android.tools.build.obfuscation/proguard.map,
+             * and Play can then symbolicate any crash report.
+             *
+             * Safe here because the shell is one Activity with no reflection and
+             * no dynamically loaded classes - everything the app needs is
+             * referenced from the manifest or from MainActivity directly. */
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig rootProject.file('keystore.properties').exists()
                     ? signingConfigs.release
                     : signingConfigs.debug
