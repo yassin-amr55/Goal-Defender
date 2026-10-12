@@ -1,0 +1,225 @@
+plugins {
+    id 'com.android.application'
+}
+
+/* The game lives in the repository root, not under app/. This copy task pulls
+ * exactly the files the itch build ships, so the APK and the zip cannot drift.
+ *
+ * It deliberately does NOT glob. md/, screenshots/, node_modules and the audit
+ * scripts must never reach the APK, and a glob would eventually drag one of them
+ * in. The list below is build-itch-zip.js's FILES array; keep them in step. */
+def shippedCode = [
+        'index.html',
+        'layout.js', 'main.js', 'ui.js', 'settings.js',
+        'achievements.js', 'player.js', 'account.js'
+]
+def shippedScenes = [
+        'BootScene', 'MenuScene', 'ShopScene', 'GameScene', 'GameOverScene',
+        'TutorialScene', 'TournamentMenuScene', 'TrophyRoomScene',
+        'TournamentNameScene', 'TournamentBracketScene', 'TournamentGameScene',
+        'TournamentVictoryScene', 'SettingsScene', 'AchievementsScene',
+        'NamePromptScene', 'LeaderboardScene', 'AccountScene'
+]
+
+android {
+    namespace 'com.dailyapps.goaldefender'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.dailyapps.goaldefender"
+        /* 24 rather than 21: androidx.webkit's WebViewAssetLoader wants 21, but
+         * 24 is the floor where WebView is updatable via Play Store, which
+         * matters because the whole shell depends on WebView behaviour. */
+        minSdk 24
+        /* Play requires new apps and updates to target within a year of the
+         * latest stable release. 35 satisfies that today; bump deliberately. */
+        targetSdk 35
+        versionCode 1
+        versionName "2.2"
+    }
+
+    signingConfigs {
+        release {
+            /* Read from keystore.properties, which is gitignored. Committed
+             * credentials are a leaked signing key: anyone with the repo could
+             * ship an update Play accepts as yours. */
+            def props = new Properties()
+            def f = rootProject.file('keystore.properties')
+            if (f.exists()) {
+                f.withInputStream { props.load(it) }
+                /* rootProject, not file(): a bare file() resolves against THIS
+                 * module's directory (app/), so the keystore was looked for at
+                 * app/goaldefender-release.jks while keystore.properties names it
+                 * relative to android/, which is where the file actually is. */
+                storeFile rootProject.file(props['storeFile'])
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false          // the game is already plain JS; nothing to shrink
+            shrinkResources false
+            signingConfig rootProject.file('keystore.properties').exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
+        }
+        debug {
+            applicationIdSuffix ".debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        /* The game's own assets are already compressed formats. */
+        jniLibs.useLegacyPackaging false
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    /* WebViewAssetLoader - the reason assets are served over https rather than
+     * file://. Without it the game has no localStorage and no usable auth.
+     *
+     * 1.12.1 is the version in this machine's Gradle cache. */
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
+/* Kotlin stdlib alignment.
+ *
+ * Kotlin 1.8 folded kotlin-stdlib-jdk7 and -jdk8 into kotlin-stdlib itself, so
+ * both the old sub-artifacts and the new fat jar land on the classpath and
+ * declare the same classes. checkDebugDuplicateClasses then fails with
+ * "Duplicate class kotlin.collections.jdk8.CollectionsJDK8Kt found in
+ * kotlin-stdlib-1.8.22.jar and kotlin-stdlib-jdk8-1.6.21.jar" - at build time,
+ * from a dependency this project never asked for by name.
+ *
+ * Forcing all three modules to one version resolves it. The sub-artifacts are
+ * empty shims at 1.8.22, so forcing them is harmless. */
+configurations.configureEach {
+    resolutionStrategy {
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22',
+              'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22',
+              'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+    }
+}
+
+/* ---- copy the shipped game into the APK ---- */
+def stageDir = layout.buildDirectory.dir('generated/gameAssets').get().asFile
+
+/* Count shippable asset files under a directory, skipping markdown.
+ * Declared as a method rather than a recursive closure: a closure that recurses
+ * through itself cannot be coerced to int here and fails with "Cannot coerce a
+ * map to class int because it is a final class". */
+int countAssets(File dir) {
+    if (dir == null || !dir.exists()) return 0
+    if (!dir.isDirectory()) return dir.name.endsWith('.md') ? 0 : 1
+    int total = 0
+    dir.eachFile { f -> total += countAssets(f) }
+    return total
+}
+
+/* THREE separate Copy tasks, one source each, and no from-spec closures.
+ *
+ * Both earlier attempts used a single task with several `from(...) { ... }` blocks
+ * and both lost the game's images:
+ *
+ *   1. `include shippedCode` on one spec is applied to its SIBLINGS by
+ *      PatternFilterable, so the assets block inherited a filter matching only
+ *      .js filenames and copied nothing.
+ *   2. With the patterns removed, `from(dir) { into ... }` still resolved to
+ *      "Could not copy D:" - the closure form mis-resolves the destination.
+ *
+ * One task per source removes both failure modes: no spec can inherit a filter
+ * from another, and there is no closure to mis-resolve. Each `from` is a plain
+ * list of files or one directory, and `into` is a plain absolute path. */
+def stageCode = tasks.register('stageCode', Copy) {
+    from(shippedCode.collect { rootProject.file("../${it}") })
+    into stageDir
+}
+def stageScenes = tasks.register('stageScenes', Copy) {
+    from(shippedScenes.collect { rootProject.file("../scenes/${it}.js") })
+    into new File(stageDir, 'scenes')
+}
+def stageAssets = tasks.register('stageAssets', Copy) {
+    from(rootProject.file('../assets'))
+    /* assets/README.md is authoring notes for whoever replaces the placeholder
+     * art. The game never loads it. */
+    exclude '**/*.md'
+    into new File(stageDir, 'assets')
+}
+
+/* No preserveFileTimestamps / reproducibleFileOrder on any of these: those live
+ * on AbstractArchiveTask (Zip, Tar) and only reached AbstractCopyTask in Gradle 9.
+ * Setting them on a Copy task fails with "No signature of method". Gradle 8.14.3
+ * offers no timestamp control on Copy. That does not make the APK
+ * non-reproducible in a way that matters here: the packaging step, not this copy,
+ * decides the bytes, and staged content is checked file by file below. */
+
+tasks.register('stageFirebase', Copy) {
+    /* google-services.json is not committed. If it is present the plugin uses
+     * it; if not, the build still produces an APK and the config compiled into
+     * player.js is used instead. */
+    from rootProject.file('app/google-services.json')
+    into stageDir
+    onlyIf { rootProject.file('app/google-services.json').exists() }
+}
+
+android.sourceSets.main.assets.srcDirs += stageDir
+
+tasks.named('preBuild') {
+    dependsOn 'stageCode', 'stageScenes', 'stageAssets', 'stageFirebase', 'verifyStagedGame'
+}
+
+/* Verification lives here rather than in a doLast on a copy task, so it runs
+ * once AFTER all three staging tasks, and it is reachable by name.
+ *
+ * Its first version checked only for code files and cheerfully passed a build
+ * with zero images staged - which is precisely the failure it exists to prevent.
+ * A missing scene is a black screen; a missing texture is a grey ball on an
+ * empty pitch. Both are discovered by the player otherwise. */
+tasks.register('verifyStagedGame') {
+    dependsOn 'stageCode', 'stageScenes', 'stageAssets'
+    doLast {
+        def required = shippedCode + shippedScenes.collect { "scenes/${it}.js" }
+        def missing = required.findAll { !new File(stageDir, it).exists() }
+        if (!missing.isEmpty()) {
+            throw new GradleException(
+                "staged game is missing ${missing.size()} code file(s): ${missing.join(', ')}. " +
+                'A missing scene is a black screen on the player\'s device.')
+        }
+
+        def expectedAssets = countAssets(rootProject.file('../assets'))
+        def stagedAssets = countAssets(new File(stageDir, 'assets'))
+        if (stagedAssets < expectedAssets) {
+            throw new GradleException(
+                "staged only ${stagedAssets} of ${expectedAssets} asset files. " +
+                'The APK would launch with missing textures.')
+        }
+
+        /* 19 ball PNGs in assets/balls, plus assets/ball.png for the Default
+         * Ball. Fewer means a filter ate them, which is exactly what happened
+         * twice on the first attempt at this task. */
+        def ballDir = new File(stageDir, 'assets/balls')
+        def stagedBalls = ballDir.isDirectory() ? ballDir.listFiles().count { it.name.endsWith('.png') } : 0
+        if (stagedBalls < 19) {
+            throw new GradleException("staged only ${stagedBalls} ball textures, expected at least 19.")
+        }
+        if (!new File(stageDir, 'assets/ball.png').exists()) {
+            throw new GradleException('staged game is missing assets/ball.png (the Default Ball texture).')
+        }
+
+        println "staged ${required.size()} code files + ${stagedAssets} assets (${stagedBalls} ball textures)"
+    }
+}

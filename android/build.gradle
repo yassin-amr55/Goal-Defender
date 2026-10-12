@@ -1,0 +1,21 @@
+// Top-level build file.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        /* 8.7.2 rather than a newer point release: it is the version already in
+         * this machine's Gradle cache, so a build does not have to reach the
+         * network for the plugin itself. */
+        classpath 'com.android.tools.build:gradle:8.7.2'
+    }
+}
+
+/* Repositories for the app modules come from settings.gradle's
+ * dependencyResolutionManagement block. Declaring them again here trips
+ * RepositoriesMode.FAIL_ON_PROJECT_REPOS, which is deliberate: it stops a module
+ * quietly resolving from a different repository than the project declared. */
+tasks.register('clean', Delete) {
+    delete rootProject.layout.buildDirectory
+}

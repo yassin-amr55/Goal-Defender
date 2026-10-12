@@ -8,6 +8,7 @@ only ever one version of each.
 |---|---|
 | **DEVLOG-V2.2.md** | Player-facing release notes for V2.2 — title, genre, and what changed. |
 | **BALL-UPGRADES.md** | **Planned per-ball upgrade system.** Not started — design only. Five things that will break the build if not handled first. |
+| **PLAY-STORE.md** | **Android packaging status.** Signed APK built, icons and screenshots ready. What must be done in the Play and Firebase consoles before upload. |
 | **DESCRIPTION.md** | What the game is, how it plays, every feature, every ball and ability. Start here. |
 | **HANDOVER.md** | The briefing for whoever (or whatever) picks this up next. Read this second. |
 | **STATE.md** | Exact current state of the working tree: what is committed, what is not, what must not be pushed. |

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the game's own palette so the flash before first paint is the
+         stadium's night sky rather than a white flash. -->
+    <color name="gd_navy">#0b1220</color>
+    <color name="gd_gold">#ffd45e</color>
+</resources>
