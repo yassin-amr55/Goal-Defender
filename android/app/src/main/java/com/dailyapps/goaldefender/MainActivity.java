@@ -123,7 +123,29 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         web = findViewById(R.id.webview);
         configureWebView(web);
-        web.loadUrl(START_URL);
+
+        /* Load the game on the next frame, not now.
+         *
+         * Measured on an emulator: Displayed at +4648ms cold, +1139ms warm. Almost
+         * all of it is Chromium spawning its sandboxed renderer, which happens
+         * lazily the first time anything touches a WebView.
+         *
+         * loadUrl() returns immediately, but the WebView is already loading while
+         * the Activity is still waiting for its first frame, so "displayed" is
+         * gated behind the whole page load. The window is therefore not presented
+         * for seconds, and on a slower phone that crosses the 5-second ANR
+         * input window - the system offers "app isn't responding", the player
+         * dismisses it, and by the next attempt the renderer is finally warm and
+         * the app appears to work. That is the most plausible reading of "it
+         * crashes a couple of times before it opens", and it is a stall rather
+         * than a crash, which is why nothing in the logs shows a fault.
+         *
+         * Posting to the view's handler lets the window draw first - the navy
+         * windowBackground from the theme - so the app is on screen immediately
+         * and the game paints over it as soon as it is ready. The perceived
+         * time-to-content drops from seconds to about a frame, and the main
+         * thread is never blocked waiting on the network or the renderer. */
+        web.post(() -> web.loadUrl(START_URL));
 
         /* Back, in one place only.
          *

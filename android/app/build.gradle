@@ -38,13 +38,14 @@ android {
          * matters because the whole shell depends on WebView behaviour. */
         minSdk 24
         targetSdk 36
-        /* 6. Play consumes a version code permanently the moment it sees it, even
+        /* 7. Play consumes a version code permanently the moment it sees it, even
          * if a later validation step rejects the release.
          *   1  burned by the build rejected for targeting API 35
          *   2  installed on a device, showed the blank-screen ERR_INVALID_RESPONSE
          *   3  published to Play
          *   4  keyboard, offline play and the login-time choice
          *   5  rejected - "no longer supports 13 devices" (hard-locked orientation)
+         *   6  orientation fixed without losing devices
          *
          * Play requires a strictly greater integer every time, so this must be
          * bumped on every upload from here on, not just this one.
@@ -52,7 +53,7 @@ android {
          * versionName stays 2.2: that is the human-facing release label, and
          * bumping it would falsely claim this is a different version of the game
          * than the working tree actually holds. */
-        versionCode 6
+        versionCode 7
         versionName "2.2"
     }
 
@@ -123,6 +124,23 @@ dependencies {
      * file://. Without it the game has no localStorage and no usable auth.
      *
      * 1.12.1 is the version in this machine's Gradle cache. */
+    /* 1.12.1, NOT 1.14.0. 1.14.0 was tried for WebViewCompat.startUpWebView, which
+         * promises to spawn Chromium's renderer off the critical path. It crashes:
+         *
+         *   FATAL EXCEPTION: main
+         *   java.lang.NullPointerException: ... ArrayList.size() ...
+         *       at androidx.webkit.a.run(SourceFile:27)
+         *       at android.os.Handler.handleCallback
+         *
+         * on a WebView provider from 2023 (measured on 113.0.5672.136), with both
+         * setShouldRunUiThreadStartUpTasks true and false, and it is not catchable
+         * from the caller - the exception is thrown on a Runnable the library
+         * posts to the main Looper, long after startUpWebView has returned. A
+         * try/catch around the call guards nothing. Plenty of real devices still
+         * run old WebViews, so an optimisation that crashes them is not one.
+         *
+         * Startup is handled in MainActivity instead, by drawing the window before
+         * the page is requested. */
     implementation 'androidx.webkit:webkit:1.12.1'
 }
 

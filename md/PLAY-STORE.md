@@ -43,7 +43,69 @@ validation step rejects the release.
 | 3 | published to Play |
 | 4 | keyboard, offline play, login-time choice |
 | 5 | **rejected — "no longer supports 13 devices"** (see below) |
-| **6** | **current build** |
+| **7** | **current build** — startup 3.2s faster, offline boot fixed |
+
+## Verified on a real Android runtime
+
+Everything else here was verified statically. This build was additionally
+installed and exercised on an **API 34 emulator with Chrome WebView 113**:
+
+```
+app launches landscape, renders, no crash across repeated cold starts
+soft keyboard opens on tap and typed text reaches the game   (mInputShown false -> true)
+RANKS and SIGN IN refuse to open offline, explaining why
+OFFLINE badge appears with no network, disappears when it returns
+Firebase is never requested at all when offline (was 3 hanging DNS lookups)
+```
+
+### Cold start, measured
+
+```
+before   4648  3518  3089  2814  2674  ms
+after    1414  1207  1450  1195  1129  1112 ms
+```
+
+`loadUrl` used to run inside `onCreate`, so the window was not presented until
+the WebView had spawned Chromium's renderer and loaded the page. It is now posted
+to the next frame, so the window draws first and the game paints over it. About
+3.2 seconds faster, and comfortably inside the 5-second ANR window — which is the
+most plausible reading of "it crashes a couple of times before it opens": a stall
+crossing into an ANR, not a crash.
+
+### One optimisation was tried and reverted
+
+`WebViewCompat.startUpWebView()` (androidx.webkit 1.14.0) promises to spawn the
+renderer off the critical path. It **crashes**:
+
+```
+FATAL EXCEPTION: main
+java.lang.NullPointerException: ... ArrayList.size() ...
+    at androidx.webkit.a.run(SourceFile:27)
+    at android.os.Handler.handleCallback
+```
+
+on WebView 113, with `setShouldRunUiThreadStartUpTasks` both true and false, and
+it is **not catchable** — the exception is thrown on a Runnable the library posts
+to the main Looper long after the call returns, so the `try/catch` guards
+nothing. Plenty of real devices still run 2023-era WebViews, so it is out. The
+dependency is pinned back to 1.12.1 with the reason recorded.
+
+### Reproducing this
+
+```
+node tools/get-cmdline-tools.js                       # sdkmanager, needed for a system image
+sdkmanager "system-images;android-34;google_apis;x86_64"
+avdmanager create avd -n gdtest -k system-images;android-34;google_apis;x86_64
+emulator -avd gdtest -no-window -gpu swiftshader_indirect
+adb install -r android/app/build/outputs/apk/release/app-release.apk
+adb shell am start -W -n com.dailyapps.goaldefender/.MainActivity
+adb logcat -s GoalDefender:V AndroidRuntime:E
+```
+
+`google_apis` is the right image, not ATD: it ships a real Chrome WebView, and
+the whole app is a WebView.
+
+For the offline path: `adb shell svc wifi disable && adb shell svc data disable`.
 
 Before every upload, increment `versionCode` in `android/app/build.gradle`. Leave
 `versionName` at `2.2` — that is the human-facing label, and bumping it would

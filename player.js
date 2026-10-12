@@ -147,6 +147,23 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
             unavailableReason = 'not-configured';
             return Promise.reject(new Error('Firebase not configured'));
         }
+        /* Do not even try when offline.
+         *
+         * Measured on a device with no network: injecting three scripts from
+         * gstatic.com meant three DNS lookups that had to time out before the
+         * loader could finish, and the game sat on its loading screen at 91% for
+         * the duration. It did eventually boot, but the stall is the player
+         * staring at a progress bar doing nothing, which is the exact feeling
+         * "this doesn't work offline" produces.
+         *
+         * Nothing is lost by refusing: the SDK is only needed for accounts and
+         * the leaderboard, neither of which can work without a connection
+         * anyway. The promise is NOT cached, so the next online call retries
+         * from scratch. */
+        if (window.GDNet && window.GDNet.isDefinitelyOffline()) {
+            unavailableReason = 'offline';
+            return Promise.reject(new Error('offline'));
+        }
         sdkPromise = new Promise(function (resolve, reject) {
             var base = 'https://www.gstatic.com/firebasejs/10.12.2';
             var needed = 3;
@@ -597,6 +614,21 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
          * never on its own, because Android WebView is unreliable about it. */
         isOnline: function () { return netOnline; },
         isKnownOffline: function () { return !netOnline; },
+
+        /* "Is the network DEFINITELY down?" - a different question from
+         * isOnline(), and the one to ask before making a request.
+         *
+         * isOnline() starts true and needs real evidence to go false, because it
+         * drives the OFFLINE badge and gates features. That conservatism is
+         * wrong here: it means a cold boot with no connection still attempts
+         * three gstatic.com script injections and waits out their DNS timeouts,
+         * which held the loading screen at 91%.
+         *
+         * navigator.onLine === false is the browser stating there is no network
+         * interface at all. That is trustworthy enough to skip a request on - a
+         * skipped request costs nothing, whereas a false negative here costs
+         * seconds of staring at a progress bar. */
+        isDefinitelyOffline: function () { return navigator.onLine === false; },
         onChange: function (fn) { netListeners.push(fn); return function () {
             netListeners = netListeners.filter(function (f) { return f !== fn; });
         }; },

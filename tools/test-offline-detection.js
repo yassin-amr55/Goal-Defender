@@ -98,6 +98,30 @@ console.log('=== a success resets the failure streak ===');
 }
 
 console.log('');
+console.log('=== isDefinitelyOffline is a different, stricter question ===');
+{
+    /* isOnline() is deliberately optimistic at boot, which is right for the
+     * badge but wrong for "should I make this request?". A cold boot with no
+     * network must be able to say "definitely offline" without first failing two
+     * requests - otherwise the game waits out three DNS timeouts. */
+    const N = build(false);
+    ok('definitely offline when the browser reports no interface',
+        N.isDefinitelyOffline() === true, N.isDefinitelyOffline());
+    ok('isOnline is still optimistic at that moment (needs real evidence)',
+        N.isOnline() === true, N.isOnline());
+}
+{
+    const N = build(true);
+    ok('not definitely offline when an interface is reported',
+        N.isDefinitelyOffline() === false, N.isDefinitelyOffline());
+    N.noteFailure();
+    N.noteFailure();
+    ok('and it stays false even after requests start failing',
+        N.isDefinitelyOffline() === false,
+        'a flaky request must not be mistaken for no interface - that would skip requests');
+}
+
+console.log('');
 console.log('=== listeners fire only on an actual change ===');
 {
     const N = build(true);

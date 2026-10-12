@@ -1065,7 +1065,7 @@ var cloudWatchTimer = 0;
          * password - which is exactly the wrong thing to tell someone whose
          * password is fine and who simply has no signal. Progress is already
          * safe in local storage; nothing is lost by refusing. */
-        if (window.GDNet && !window.GDNet.isOnline()) {
+        if (window.GDNet && (window.GDNet.isDefinitelyOffline() || !window.GDNet.isOnline())) {
             return Promise.resolve({
                 ok: false,
                 offline: true,
@@ -1090,7 +1090,11 @@ var cloudWatchTimer = 0;
             if (window.GDNet) window.GDNet.noteFailure();
             // loadSdk() records why it failed; translate that into English.
             var st = P.status();
-            if (st === 'sdk-failed' || st === 'init-failed' || st === 'not-configured') {
+            /* 'offline' joins the handled states because loadSdk now refuses to
+             * inject the SDK when there is no connection. Without this the player
+             * would get a raw "offline" rejection string instead of the sentence
+             * that tells them their progress is safe and to try again later. */
+            if (st === 'sdk-failed' || st === 'init-failed' || st === 'not-configured' || st === 'offline') {
                 return {
                     ok: false,
                     error: 'Could not reach the account service. Check your connection.'
