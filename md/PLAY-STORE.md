@@ -40,12 +40,57 @@ validation step rejects the release.
 |---|---|
 | 1 | rejected for targeting API 35 — but still burned |
 | 2 | installed on a device, showed the blank-screen bug below |
-| **3** | **current build** |
+| 3 | published to Play |
+| **4** | **current build** — keyboard, offline, login choice |
 
 Before every upload, increment `versionCode` in `android/app/build.gradle`. Leave
 `versionName` at `2.2` — that is the human-facing label, and bumping it would
 falsely claim this is a different version of the game than the working tree
 actually holds.
+
+## The game works offline
+
+Everything is bundled. Phaser used to be fetched from `unpkg.com` at runtime,
+which meant no connection meant a blank screen — the exact failure offline play is
+supposed to prevent. It is now vendored:
+
+```
+node tools/vendor-phaser.js      # refreshes assets/phaser.min.js
+```
+
+Verified by booting the game with all cross-origin requests blocked: **38
+textures loaded, menu up, zero external requests** except the Firebase session
+lookup, which fails silently and correctly.
+
+- `window.GDNet` reports connectivity. It trusts `navigator.onLine === false` but
+  does not treat `true` as proof, because a captive portal is "online" and can
+  reach nothing. Real request outcomes are recorded as the tiebreaker.
+- Accounts and the leaderboard **say why** they cannot open instead of
+  disappearing — hiding them reads as the content having been removed.
+- An OFFLINE pill appears bottom-centre in the menu.
+- Progress stays in `localStorage` throughout; nothing is lost going offline.
+
+### Signing in asks which progress is real
+
+Signing in used to merge silently, taking the larger of every number. That is
+right when both sides are the same player's progress and wrong when they are not
+— hand someone else's account, or share a device, and the merge invents a save
+belonging to neither, with no way to tell.
+
+Every deliberate sign-in to an existing account now stops and asks:
+
+| | effect |
+|---|---|
+| **USE ACCOUNT STATS** | the account overwrites this device |
+| **USE THIS DEVICE** | this device overwrites the account |
+
+Both are explicit overwrites, and the dialog says so. It is **not** asked on cold
+start — `restore()` runs the same code path every launch, and a returning player
+whose save has synced is not standing in front of a conflict. That path uses the
+existing merge, which can only ever combine one account's own progress.
+
+It is also skipped when either side is empty: a fresh install has nothing to
+lose, and auto-answering "use this device" there would **erase the account**.
 
 ### ⚠️ the first on-device build was a blank screen
 

@@ -144,7 +144,10 @@
             label: 'RANKS', labelSize: UI.TYPE.body,
             fillTop: 0xf0a500, fillBottom: 0xc98a08,
             depth: 50,
-            onClick: () => this.scene.start('LeaderboardScene')
+            onClick: () => {
+                if (this.blockIfOffline('The leaderboard')) return;
+                this.scene.start('LeaderboardScene');
+            }
         });
 
         /* ---------------- account (top right, under settings + mute) --------
@@ -232,6 +235,33 @@
             onSettings: () => this.scene.start('SettingsScene')
         });
 
+        /* ---------------- offline badge ---------------- */
+
+        /* The whole game is bundled and works with no connection at all. Only
+         * accounts and the leaderboard need the network, so rather than hiding
+         * them - which looks like the content was removed - they stay put and say
+         * why they cannot open. A player offline still sees a complete game.
+         *
+         * Placed bottom-centre: clear of the version stamp at the bottom right,
+         * the account slot at the top right and the navigation column on the
+         * left. */
+        this.offlineBadge = this.add.graphics().setDepth(40).setVisible(false);
+        this.offlineText = this.add.text(640, 664, 'OFFLINE', {
+            fontSize: UI.TYPE.small + 'px',
+            fontFamily: UI.FAMILY,
+            fontStyle: '900',
+            color: '#ffd166'
+        }).setOrigin(0.5).setDepth(41).setVisible(false);
+
+        this.refreshOffline();
+        if (window.GDNet) {
+            window.GDNet.onChange(() => {
+                if (this.scene && this.scene.isActive()) this.refreshOffline();
+            });
+        }
+
+        this.events.on('shutdown', () => { if (window.GDNet) window.GDNet._offHook = null; });
+
         // Safety net: pay out anything earned elsewhere (shop, tournament, run)
         if (window.Achievements) window.Achievements.check(this);
 
@@ -295,6 +325,54 @@
      *
      * Colour carries the state: gold border and gold text when signed in (the
      * game's "this is the one" colour), neutral blue when signed out. */
+    /* ---------------- offline ----------------
+     *
+     * The game is entirely bundled and plays with no connection at all. Only
+     * accounts and the leaderboard need the network, so rather than hiding those
+     * two - which reads as the content having been removed - they stay exactly
+     * where they are and explain themselves. An offline player still sees a
+     * complete game.
+     */
+
+    /* Pill behind the OFFLINE label.
+     *
+     * Drawn with the same rounded geometry as every other chip in the game
+     * (the money pill, the BEST pill, the account pill). A plain rectangle next
+     * to the game's rounded buttons is exactly the kind of small mismatch that
+     * makes a screen look broken rather than designed. */
+    refreshOffline() {
+        if (!this.offlineText) return;
+        const off = !!(window.GDNet && !window.GDNet.isOnline());
+
+        this.offlineText.setVisible(off);
+        if (!this.offlineBadge) return;
+        this.offlineBadge.setVisible(off);
+        if (!off) { this.offlineBadge.clear(); return; }
+
+        const w = this.offlineText.width + 34;
+        const h = 30;
+        this.offlineBadge.clear();
+        this.offlineBadge.fillStyle(0x3a2c08, 0.92);
+        this.offlineBadge.fillRoundedRect(640 - w / 2, 664 - h / 2, w, h, h / 2);
+        this.offlineBadge.lineStyle(2, 0xffd166, 0.55);
+        this.offlineBadge.strokeRoundedRect(640 - w / 2, 664 - h / 2, w, h, h / 2);
+    }
+
+    /* True when the player tried to open something that needs the network. Shows
+     * the reason where they tapped and returns true so the caller skips the
+     * navigation - better than opening a screen that can only report an error. */
+    blockIfOffline(what) {
+        if (!window.GDNet || window.GDNet.isOnline()) return false;
+        this.refreshOffline();
+        const t = this.add.text(640, 420, what + ' needs a connection.', {
+            fontSize: '22px', fontFamily: UI.FAMILY, fontStyle: '800', color: '#ffd166',
+            stroke: '#000000', strokeThickness: 4
+        }).setOrigin(0.5).setDepth(60);
+        this.tweens.add({ targets: t, alpha: 0, delay: 1800, duration: 400,
+            onComplete: () => t.destroy() });
+        return true;
+    }
+
     makeAccountSlot() {
         /* Right edge derived from the top-right cluster so the two line up.
          *
@@ -369,7 +447,13 @@
         this.accountZone = this.add.zone(right, cy, 200, h + 10).setOrigin(0.5);
         this.accountZone.setInteractive({ useHandCursor: true });
         this.accountZone.setDepth(51);
-        this.accountZone.on('pointerdown', () => this.scene.start('AccountScene'));
+        this.accountZone.on('pointerdown', () => {
+                /* Accounts need the network. Refused here rather than opening a
+                 * screen that could only show an error, so the player gets the
+                 * reason in place of a dead end. */
+                if (this.blockIfOffline('Accounts')) return;
+                this.scene.start('AccountScene');
+            });
         /* No hover animation here.
          *
          * Every other control in the game grows 4-8% on hover, which is what

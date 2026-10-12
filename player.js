@@ -405,6 +405,17 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
             return Promise.resolve({ skipped: 'not-an-improvement' });
         }
 
+        /* Offline: do not spend a submission from the rate limit, and do not
+         * touch lastSubmitted. Both matter: the session counter is the only
+         * thing standing between a player and a flooded board, and burning one on
+         * a write that cannot happen would mean the player's FIRST successful
+         * online run - the one that finally reaches the board - was spent on a
+         * failed attempt. Leaving lastSubmitted alone means the score is still
+         * an improvement next time and gets published then. */
+        if (window.GDNet && !window.GDNet.isOnline()) {
+            return Promise.resolve({ skipped: 'offline' });
+        }
+
         submissionsThisSession++;
 
         return ensureSignedIn().then(function (user) {
@@ -432,10 +443,12 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
                 .doc(user.uid)
                 .set(payload, { merge: true })
                 .then(function () {
+                    if (window.GDNet) window.GDNet.noteSuccess();
                     lastSubmitted = stats;
                     return { ok: true, uid: user.uid, stats: stats };
                 });
         }).catch(function (e) {
+            if (window.GDNet) window.GDNet.noteFailure();
             // Never surface this to the player: a board is not worth an error.
             return { skipped: 'error', error: String(e && e.message || e) };
         });
@@ -448,12 +461,19 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
         if (field !== 'highScore' && field !== 'trophies') {
             return Promise.resolve([]);
         }
+        if (window.GDNet && !window.GDNet.isOnline()) {
+            /* Do not even try. Without this the scene sits on "Loading..." until
+             * the request times out, which on a dead connection is a long, silent
+             * wait - the exact thing the player is trying to escape. */
+            return Promise.resolve([]);
+        }
         return loadSdk().then(function () {
             return firestore.collection(COLLECTION)
                 .orderBy(field, 'desc')
                 .limit(50)
                 .get();
         }).then(function (snap) {
+            if (window.GDNet) window.GDNet.noteSuccess();
             var rows = [];
             snap.forEach(function (doc) {
                 var d = doc.data() || {};
@@ -466,6 +486,7 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
             });
             return rows;
         }).catch(function () {
+            if (window.GDNet) window.GDNet.noteFailure();
             return [];
         });
     }
@@ -474,6 +495,97 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
         var n = parseInt(v || 0, 10);
         return isFinite(n) && n >= 0 ? n : 0;
     }
+
+    /* ---- offline detection ---------------------------------------------------
+     *
+     * The game itself is fully offline-capable: every scene, every ball texture
+     * and Phaser itself are bundled. Only accounts and the leaderboard need the
+     * network. So "offline" is not a degraded mode, it is the normal case for a
+     * lot of players - on a plane, on a train, or on mobile data they do not
+     * want to spend.
+     *
+     * navigator.onLine is necessary but not sufficient: it reports whether an
+     * interface exists, not whether anything is reachable. A phone on a captive
+     * portal is very much "online" and can reach nothing. It is also famously
+     * sticky - some devices report false positives that never self-correct. So a
+     * real network call is used as the tiebreaker and its result is remembered:
+     * once a request has actually succeeded, the player is treated as online
+     * regardless of what onLine says, because the game demonstrably just worked.
+     */
+    var netListeners = [];
+    var netKnown = false;      // has a real request succeeded or failed recently?
+    var netOnline = true;
+
+    function netEmit() {
+        netListeners.forEach(function (fn) {
+            try { fn(netOnline); } catch (e) { /* one bad listener must not stop the rest */ }
+        });
+    }
+
+    function netSet(online, certain) {
+        var changed = netOnline !== online;
+        netOnline = online;
+        if (certain) netKnown = true;
+        if (changed) netEmit();
+        return changed;
+    }
+
+    /* Called by every network entry point. A success is proof of connectivity
+     * even when navigator.onLine says otherwise. */
+    function netSucceeded() { return netSet(true, true); }
+    /* A failure is only treated as proof once the browser itself also thinks it
+     * is offline, or once we have already seen a failure - otherwise a single
+     * flaky request would flip the whole UI to OFFLINE mid-game. */
+    function netFailed() {
+        if (navigator.onLine === false) netSet(false, true);
+        else if (netKnown && !netOnline) netSet(false, true);
+        return netOnline;
+    }
+
+    function netInit() {
+        window.addEventListener('online', function () { netSet(true, false); });
+        window.addEventListener('offline', function () { netSet(false, true); });
+        /* A tablet that wakes from sleep often has no connection and never fires
+         * the offline event, so re-probe whenever the player comes back. */
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') netProbe();
+        });
+    }
+
+    /* Cheap reachability check against a real host, with a short timeout. Used to
+     * settle the ambiguous cases without blocking anything. */
+    function netProbe() {
+        if (!navigator.onLine) { netSet(false, true); return Promise.resolve(false); }
+        try {
+            return fetch('https://www.gstatic.com/generate_204', { method: 'GET', cache: 'no-store' })
+                .then(function () { netSet(true, true); return true; })
+                .catch(function () { netSet(false, true); return false; });
+        } catch (e) {
+            netSet(false, true);
+            return Promise.resolve(false);
+        }
+    }
+
+    window.GDNet = {
+        isOnline: function () {
+            /* onLine === false is a definite no. onLine === true is only a maybe
+             * until a request has actually proven otherwise. */
+            if (navigator.onLine === false) return false;
+            return netOnline;
+        },
+        /* True only when we are certain - a request really failed, or the browser
+         * says there is no interface. Use this to decide whether to bother the
+         * player with an OFFLINE message at all. */
+        isKnownOffline: function () { return !window.GDNet.isOnline(); },
+        onChange: function (fn) { netListeners.push(fn); return function () {
+            netListeners = netListeners.filter(function (f) { return f !== fn; });
+        }; },
+        noteSuccess: netSucceeded,
+        noteFailure: netFailed,
+        probe: netProbe,
+        _init: netInit
+    };
+    netInit();
 
     window.GDPlayer = {
         NAME_KEY: NAME_KEY,

@@ -61,8 +61,12 @@ ok('nav styles/themes present', names.some(n => n.startsWith('res/')),
 console.log('');
 console.log('=== the game must be untouched by shrinking ===');
 const game = names.filter(n => n.startsWith('assets/'));
-ok('all 25 code files still staged', game.filter(n => n.endsWith('.js')).length === 24,
-    game.filter(n => n.endsWith('.js')).length + ' js + index.html');
+/* phaser.min.js is a vendored library, not game code - see verify-aab.js. */
+const jsCount = game.filter(n => n.endsWith('.js') && !n.endsWith('/phaser.min.js')).length;
+ok('all 25 code files still staged', jsCount === 24,
+    jsCount + ' game js + index.html');
+ok('vendored Phaser still staged (offline boot depends on it)',
+    game.includes('assets/assets/phaser.min.js'));
 ok('all 19 ball textures still staged',
     game.filter(n => n.startsWith('assets/assets/balls/')).length === 19,
     String(game.filter(n => n.startsWith('assets/assets/balls/')).length));

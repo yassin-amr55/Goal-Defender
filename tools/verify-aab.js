@@ -103,9 +103,19 @@ ok('version name reads back as 2.2, matching UI.VERSION', versionName === '2.2',
 console.log('');
 console.log('=== game payload ===');
 const game = names.filter(n => n.startsWith('base/assets/'));
-ok('25 code files staged (24 js + index.html)',
-    game.filter(n => n.endsWith('.js')).length === 24 && game.includes('base/assets/index.html'),
-    `${game.filter(n => n.endsWith('.js')).length} js + index.html`);
+/* phaser.min.js is a vendored third-party bundle that happens to end in .js.
+ * It lives under assets/ and is required for offline play, but it is not game
+ * code - counting it as such made the "24 js + index.html" check fail the
+ * moment offline support landed, which would have trained everyone to ignore it.
+ * It gets its own check below instead. */
+const isGameJs = n => n.endsWith('.js') && !n.endsWith('/phaser.min.js');
+const jsCount = game.filter(isGameJs).length;
+ok('25 code files staged (24 game js + index.html)',
+    jsCount === 24 && game.includes('base/assets/index.html'),
+    `${jsCount} game js + index.html`);
+ok('vendored Phaser is bundled so the game boots offline',
+    game.includes('base/assets/assets/phaser.min.js'),
+    'assets/phaser.min.js');
 ok('17 of 17 scenes present', game.filter(n => n.startsWith('base/assets/scenes/')).length === 17,
     String(game.filter(n => n.startsWith('base/assets/scenes/')).length));
 ok('19 of 19 ball textures present', game.filter(n => n.startsWith('base/assets/assets/balls/')).length === 19,

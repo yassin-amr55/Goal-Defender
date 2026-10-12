@@ -199,6 +199,7 @@ class AccountScene extends Phaser.Scene {
 
         if (tab === 'account') this.renderAccount();
         else if (tab === 'signup') this.renderSignup();
+        else if (tab === 'choice') { /* showSaveChoice() drew it; render nothing else */ }
         else this.renderLogin();
     }
 
@@ -590,6 +591,16 @@ class AccountScene extends Phaser.Scene {
         const done = (r) => {
             this.busy = false;
             if (!r.ok) { this.showStatus(r.error, '#ff8a8a'); return; }
+
+            /* Signed in, but the sign-in stopped short of touching either save
+             * because there are two sets of progress and only the player knows
+             * which is real. Ask before anything is written - see
+             * account.js's "the login-time choice". */
+            if (r.needsChoice) {
+                this.showSaveChoice(r);
+                return;
+            }
+
             this.setTab('account');
             this.showStatus(r.isNew
                 ? 'Account created. Your progress is saved to it.'
@@ -598,6 +609,88 @@ class AccountScene extends Phaser.Scene {
 
         if (this.tab === 'signup') A.signUp(u, p, c).then(done);
         else A.signIn(u, p).then(done);
+    }
+
+    /* ---------------- the account-vs-device choice ----------------
+     *
+     * Both answers are destructive in one direction, which is exactly why the
+     * player has to pick: "account stats" discards whatever is on this device,
+     * "this device" discards whatever the account held. Neither can be undone -
+     * there is no copy afterwards - so it is stated plainly and nothing is
+     * chosen on their behalf.
+     *
+     * The figures shown are counted from the two saves, not invented, so the
+     * player is comparing the real thing on both sides. */
+    showSaveChoice(info) {
+        const A = window.GDAccount;
+        const cx = 640;
+        /* setTab first: it clears whatever tab was on screen, so the login form
+         * does not sit behind the dialog. 'choice' deliberately renders nothing
+         * of its own. */
+        this.setTab('choice');
+        this.showStatus('', '#8fa6bd');
+        /* subtitle is created in create() rather than per tab, so clearTab() does
+         * not touch it. Without this the page still reads "Welcome back" above a
+         * dialog asking whether to keep that account at all, which contradicts
+         * itself. */
+        if (this.subtitle) this.subtitle.setText('');
+
+        const panel = this.own(this.add.graphics());
+        panel.fillStyle(0x0d1b2a, 1);
+        panel.fillRoundedRect(180, 140, 920, 490, 18);
+        panel.lineStyle(3, 0x2f4f6f, 1);
+        panel.strokeRoundedRect(180, 140, 920, 490, 18);
+
+        const text = (x, y, s, size, color, weight) => this.own(this.add.text(x, y, s, {
+            fontSize: size + 'px', color: color, fontStyle: weight,
+            align: 'center', wordWrap: { width: 820 }
+        }).setOrigin(0.5));
+
+        text(cx, 190, 'WHICH PROGRESS SHOULD BE KEPT?', 29, '#ffd166', '900');
+        text(cx, 232,
+            'This device and your account have different progress.',
+            19, '#c6d6e5', '700');
+        text(cx, 260,
+            'This device holds ' + (info.deviceHas || 0) + ' saved values. '
+            + 'Your account holds ' + (info.accountHas || 0) + '.',
+            18, '#8fa6bd', '700');
+
+        const finish = (mode) => {
+            this.showStatus('Working...', '#8fa6bd');
+            A.resolveSaveChoice(mode).then((r) => {
+                if (!r.ok) { this.showStatus(r.error, '#ff8a8a'); return; }
+                this.setTab('account');
+                this.showStatus(mode === 'local'
+                    ? "This device's progress is now your account's."
+                    : "Your account's progress is now on this device.", '#7ee787');
+            });
+        };
+
+        /* Two buttons, each with its consequence written under it. The
+         * consequence is the whole point - both answers overwrite something -
+         * so it is spelled out rather than left for the player to infer. */
+        const choice = (y, label, sub, mode, fillTop, fillBottom) => {
+            const btn = UI.button(this, {
+                x: cx, y: y, w: 720, h: 74,
+                label: label,
+                labelSize: 22,
+                fillTop: fillTop, fillBottom: fillBottom,
+                onClick: () => finish(mode)
+            });
+            (btn && btn.graphics ? [btn.graphics, btn.zone] : [btn])
+                .filter(Boolean)
+                .forEach((o) => this.own(o));
+            text(cx, y + 56, sub, 17, '#9fb4c8', '700');
+        };
+
+        choice(326, 'USE ACCOUNT STATS',
+            "Replaces this device's progress", 'account', 0x2f6fd0, 0x1f4f9c);
+        choice(452, 'USE THIS DEVICE',
+            "Replaces your account's progress", 'local', 0x35c759, 0x1f9c3d);
+
+        text(cx, 566,
+            'Whichever you choose, the other is overwritten. This cannot be undone.',
+            18, '#ff8a8a', '700');
     }
 
     showStatus(msg, color) {

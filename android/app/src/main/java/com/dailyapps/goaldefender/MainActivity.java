@@ -11,9 +11,11 @@ import android.annotation.SuppressLint;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
-import android.view.KeyEvent;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -25,6 +27,14 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.webkit.WebViewAssetLoader;
 
 public class MainActivity extends AppCompatActivity {
+
+    /* Logcat tag. If the app ever misbehaves on a device again, this is how the
+     * cause is found instead of guessing:
+     *   adb logcat -s GoalDefender:V
+     * Every decision point in this file logs, so the last thing printed before
+     * the app dies is visible. A crash that cannot be diagnosed is a crash that
+     * gets "fixed" by changing something unrelated. */
+    private static final String TAG = "GoalDefender";
 
     /* appassets.androidplatform.net is a domain Android reserves for exactly
      * this. It must also be added to the Firebase console's authorised domains
@@ -57,6 +67,26 @@ public class MainActivity extends AppCompatActivity {
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        /* Log the crash, then let it happen normally so Play still receives it.
+         *
+         * The reported symptom was "the app closes and I have to open it again",
+         * which is what an uncaught exception looks like from the outside. With
+         * nothing logged, the only way to find it was to guess at the cause and
+         * change unrelated code until it stopped - which is how the singleTask /
+         * double-back fixes below were chosen, and they are hardening, not proof.
+         * This makes the next occurrence a one-command diagnosis:
+         *   adb logcat -s GoalDefender:V AndroidRuntime:E
+         */
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            Log.e(TAG, "UNCAUGHT on " + t.getName(), e);
+            /* Kill the process, which is what Android's own default handler
+             * does. A lambda cannot rethrow a checked Throwable, and swallowing
+             * it would leave a half-dead process running - worse than a clean
+             * crash, because the app looks alive but does nothing. */
+            android.os.Process.killProcess(android.os.Process.myPid());
+            System.exit(10);
+        });
+
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_main);
@@ -87,6 +117,21 @@ public class MainActivity extends AppCompatActivity {
         web.setLongClickable(false);
         web.setOnLongClickListener(v -> true);
 
+        /* The soft keyboard. The game draws its own text field and focuses a real
+         * hidden DOM <input> behind it, which is the only way to raise a mobile
+         * keyboard reliably. That input cannot receive focus unless the WebView
+         * itself holds it - and a WebView will not hold focus in touch mode
+         * unless it is told it can. Without these two calls the tap focuses the
+         * input, focus() reports success, and no keyboard ever appears, so the
+         * field looks broken rather than disabled.
+         *
+         * The XML sets the same attributes; both are needed, because the XML
+         * form is what the layout inflater reads and these are what the runtime
+         * actually consults once a parent has taken focus. */
+        web.setFocusable(true);
+        web.setFocusableInTouchMode(true);
+        web.requestFocus();
+
         final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
                 .setDomain("appassets.androidplatform.net")
                 .addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(this))
@@ -95,7 +140,29 @@ public class MainActivity extends AppCompatActivity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-                return loader.shouldInterceptRequest(req.getUrl());
+                WebResourceResponse res = loader.shouldInterceptRequest(req.getUrl());
+                if (res == null) {
+                    /* Returning null tells the WebView "I cannot serve this, carry
+                     * on as if there were no interception at all" - so it makes a
+                     * REAL network request for appassets.androidplatform.net,
+                     * which resolves nowhere, and the player gets
+                     * net::ERR_INVALID_RESPONSE with no explanation. That is
+                     * exactly how the first on-device build failed, and it was
+                     * invisible from here because the response was still "handled
+                     * successfully". Logging it makes the next one obvious. */
+                    Log.w(TAG, "asset loader could not serve " + req.getUrl()
+                            + " - the app will show a WebView error page");
+                }
+                return res;
+            }
+
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest req,
+                                        WebResourceError error) {
+                if (req.isForMainFrame()) {
+                    Log.e(TAG, "main frame failed to load: " + req.getUrl()
+                            + " (" + error.getDescription() + " / " + error.getErrorCode() + ")");
+                }
             }
 
             @Override
@@ -106,6 +173,11 @@ public class MainActivity extends AppCompatActivity {
                  * review. */
                 return !req.getUrl().toString().startsWith(ORIGIN);
             }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                Log.i(TAG, "loaded " + url);
+            }
         });
 
         /* Full screen. The game is 1280x720 and draws its own stadium; letting the
@@ -115,10 +187,21 @@ public class MainActivity extends AppCompatActivity {
 
         web.loadUrl(START_URL);
 
-        /* Back must go back through the game before it leaves the app. */
+        /* Back, in one place only.
+         *
+         * This used to be handled TWICE - once by onKeyDown and once by the
+         * OnBackPressedDispatcher. Both receive KEYCODE_BACK, so a single press
+         * could call web.goBack() and then immediately finish the activity: the
+         * game navigated back and the app closed at the same time. On a screen
+         * with nowhere left to go back to, that reads as the app closing itself.
+         *
+         * The dispatcher is the supported path, so onKeyDown is gone. The
+         * keyboard is dismissed first, because while the name field has focus
+         * back should close the keyboard rather than leave the screen. */
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
+                if (hideKeyboard()) return;
                 if (web.canGoBack()) {
                     web.goBack();
                 } else {
@@ -129,13 +212,17 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK && web.canGoBack()) {
-            web.goBack();
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
+    /** @return true if a soft keyboard was showing and has now been dismissed. */
+    private boolean hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm == null) return false;
+        View focused = getCurrentFocus();
+        if (focused == null) return false;
+        if (!imm.isAcceptingText()) return false;
+        imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
+        focused.clearFocus();
+        web.requestFocus();
+        return true;
     }
 
     @Override

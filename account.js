@@ -732,7 +732,149 @@ var cloudWatchTimer = 0;
         return /permission|insufficient/i.test(String((e && e.message) || e));
     }
 
-    function afterAuth(user, typedUsername, signedInAs) {
+    /* ---- the login-time choice between this device and the account -------
+     *
+     * Signing in used to merge silently: take the larger of every number and the
+     * union of every list. That is the friendliest behaviour when both sides
+     * hold the SAME player's progress, and the wrong one when they do not. Hand
+     * someone a friend's account, or play on a shared device, and "take the
+     * best of both" hands them a save that belongs to neither - inflated money
+     * and a best score that no single run produced, with no way to tell.
+     *
+     * So the player is asked. Every login to an existing account puts this
+     * choice in front of them:
+     *
+     *   "USE ACCOUNT STATS"  the account is the truth; this device is set to it
+     *   "USE THIS DEVICE"     this device is the truth; the account is set to it
+     *
+     * Both are explicit overwrites, not merges. mergeSave() is still used for
+     * everything AFTER the choice - it is the right tool for keeping a single
+     * player's own progress current across devices, which is a different
+     * problem from reconciling two different players.
+     *
+     * The question is skipped only when there is genuinely nothing to choose
+     * between. A fresh install has no local progress to lose, so asking would be
+     * theatre, and auto-answering "use this device" would ERASE the account -
+     * so that case has to be handled deliberately, not by falling through.
+     */
+    var pendingChoice = null;
+
+    function countSet(save) {
+        if (!save) return 0;
+        return SAVE_KEYS.filter(function (k) {
+            var v = save[k];
+            return v !== undefined && v !== null && v !== '';
+        }).length;
+    }
+
+    /* Both sides empty, or only one side populated, means there is no conflict
+     * worth a dialog. Return the mode to apply automatically, or null to ask.
+     *
+     * explicit is true only when the player just typed a username and password.
+     * It changes nothing about WHICH save is correct - it changes only whether
+     * the player is asked.
+     *
+     * That distinction is load-bearing. restore() runs the same path on every
+     * cold start, and a returning player whose account has synced is not standing
+     * in front of a conflict - they are reopening the app. Putting a modal in
+     * that path would block the game from launching until the player answered a
+     * question about data that was already agreeing with itself. */
+    function automaticChoice(explicit) {
+        var local = countSet(readSave());
+        var cloud = countSet(currentAccount && currentAccount.save);
+
+        if (local === 0) return 'account';   // nothing on this device to lose
+        if (cloud === 0) return 'local';     // account has nothing to lose
+
+        if (explicit) return null;           // deliberate sign-in: always ask
+
+        /* A cold start where this device's save is already stamped as this
+         * account's own. That is one player's progress in two places, which is
+         * what mergeSave() is for - not a conflict between two players. */
+        if (currentUser && saveOwner() === currentUser.uid) return 'merge';
+        return 'merge';
+    }
+
+    /* Applied for both the automatic path and the two answers, so "which side
+     * wins" has exactly one implementation. */
+    function applyChoice(mode) {
+        if (mode === 'merge') {
+            /* The same player's progress on two devices. Every cumulative stat
+             * only goes up and the lists only grow, so the better of each is
+             * always right. This is what a cold start uses, and it can never
+             * hand one player another's numbers because both sides are known to
+             * be the same account. */
+            mergeSave(currentAccount && currentAccount.save);
+            stampSaveOwner(currentUser.uid);
+            return Promise.resolve({ ok: true, mode: mode });
+        }
+        if (mode === 'account') {
+            applyCloudSaveAuthoritative(currentAccount && currentAccount.save);
+            stampSaveOwner(currentUser.uid);
+            invalidateCaches();
+        } else {
+            /* Local wins: the device's save becomes the account's. readSave()
+             * reads exactly the keys the account document stores, so this cannot
+             * smuggle device-only flags up to the cloud. */
+            var save = readSave();
+            var balls;
+            try { balls = JSON.parse(save.goalDefenderOwnedBalls || '["default"]'); }
+            catch (e) { balls = ['default']; }
+            if (!Array.isArray(balls) || !balls.length) balls = ['default'];
+            if (balls.indexOf('default') === -1) balls.unshift('default');
+            save.goalDefenderOwnedBalls = JSON.stringify(balls);
+            localStorage.setItem('goalDefenderOwnedBalls', save.goalDefenderOwnedBalls);
+
+            var equipped = localStorage.getItem('goalDefenderEquippedBall');
+            if (equipped && balls.indexOf(equipped) === -1) {
+                localStorage.setItem('goalDefenderEquippedBall', 'default');
+            }
+            stampSaveOwner(currentUser.uid);
+            invalidateCaches();
+            /* Write the account straight away rather than waiting for the 1.5s
+             * debounce. The player just chose this; making them close the app
+             * before it stuck would be asking them to trust a promise. */
+            return pushToCloud();
+        }
+        return Promise.resolve({ ok: true, mode: mode });
+    }
+
+    /* Finish a sign-in once the choice has been made (or not needed). Shared by
+     * the automatic path and resolveSaveChoice so both end identically. */
+    function finishSignIn(mode) {
+        var cloud = currentAccount && currentAccount.save;
+        return applyChoice(mode).then(function () {
+            installCloudWatch();
+            return retireAnonymousIdentity();
+        }).then(function () {
+            /* Record the visit. Kept here rather than at the call sites so both
+             * the automatic path and the answered dialog write it. */
+            return P.firestore().collection(ACCOUNT_COLLECTION).doc(currentUser.uid)
+                .set({ lastLogin: ts() }, { merge: true })
+                .catch(function () { return null; });   // cosmetic, never fail a sign-in for it
+        }).then(function () {
+            lastPushedSignature = signatureOf(currentAccount.username,
+                mode === 'local' ? readSave() : cloud);
+            emit();
+            return { ok: true, isNew: false, username: currentAccount.username, mode: mode };
+        });
+    }
+
+    /* Called from AccountScene when the player answers the dialog. */
+    function resolveSaveChoice(mode) {
+        if (!pendingChoice) return Promise.resolve({ ok: false, error: 'No sign-in is waiting for a decision.' });
+        if (mode !== 'account' && mode !== 'local') {
+            return Promise.resolve({ ok: false, error: 'Unknown choice.' });
+        }
+        pendingChoice = null;
+        return finishSignIn(mode).catch(function (e) {
+            return { ok: false, error: friendlyError(e) };
+        });
+    }
+
+    function needsSaveChoice() { return !!pendingChoice; }
+
+    function afterAuth(user, typedUsername, signedInAs, explicitLogin) {
         currentUser = user;
         if (!user) {
             currentAccount = null;
@@ -774,36 +916,37 @@ var cloudWatchTimer = 0;
             .then(function (snap) {
                 if (snap.exists) {
                     // Returning player. The account is the source of truth for
-                    // the name, but the SAVE is merged rather than applied
-                    // wholesale - see mergeSave(). Overwriting meant progress
-                    // made since the last sync silently disappeared.
+                    // the name. The SAVE is NOT touched yet: this device may hold
+                    // a different player's progress, and merging them silently
+                    // invents a save belonging to neither. Ask first.
                     applyAccount(snap);
-                    mergeSave(currentAccount.save);
-                    /* This account now owns whatever is on this device. Stamped
-                     * AFTER the merge so a failure part-way through cannot leave
-                     * a save attributed to an account that never claimed it. */
-                    stampSaveOwner(user.uid);
-                    /* Reload anything derived from the save in memory. Only
-                     * needed when a switch actually happened - reloading the
-                     * caches on an ordinary sign-in would be wasted work, and
-                     * skipping it also avoids discarding an unlock queued moments
-                     * earlier in the same session. */
-                    if (switched) invalidateCaches();
-                    /* Seed the fingerprint from what we just read, so the
-                     * watcher does not mistake this sign-in for an outside
-                     * edit and "restore" the values it already applied. */
-                    lastPushedSignature = signatureOf(currentAccount.username, currentAccount.save);
-                    return P.firestore().collection(ACCOUNT_COLLECTION).doc(user.uid)
-                        .set({ lastLogin: ts() },
-                            { merge: true })
-                        .then(function () {
-                            installCloudWatch();
-                            return retireAnonymousIdentity();
-                        })
-                        .then(function () {
-                            emit();
-                            return { ok: true, isNew: false, username: currentAccount.username };
-                        });
+
+                    var auto = automaticChoice(!!explicitLogin);
+                    if (auto === null) {
+                        /* Stamp the owner now. A save sitting on this device is
+                         * about to be either adopted by this account or pushed
+                         * onto it, and until the player answers, nothing should
+                         * push it anywhere. Doing this before the dialog is what
+                         * stops the 1.5s sync debounce from uploading one
+                         * stranger's progress to another stranger's account while
+                         * the question is on screen. */
+                        stampSaveOwner(user.uid);
+                        pendingChoice = { uid: user.uid, switched: switched };
+                        return {
+                            ok: true,
+                            isNew: false,
+                            needsChoice: true,
+                            username: currentAccount.username,
+                            accountHas: countSet(currentAccount.save),
+                            deviceHas: countSet(readSave())
+                        };
+                    }
+                    if (switched) {
+                        /* Not asked, but this was still a switch: an account
+                         * change has to reload the derived caches. */
+                        invalidateCaches();
+                    }
+                    return finishSignIn(auto);
                 }
 
                 if (!creating) {
@@ -915,6 +1058,20 @@ var cloudWatchTimer = 0;
                 error: 'Accounts are not available in this build.'
             });
         }
+        /* Fail fast, and say so plainly.
+         *
+         * Signing in needs the network. Offline, Firebase rejects the request
+         * and the error that reaches the player is indistinguishable from a wrong
+         * password - which is exactly the wrong thing to tell someone whose
+         * password is fine and who simply has no signal. Progress is already
+         * safe in local storage; nothing is lost by refusing. */
+        if (window.GDNet && !window.GDNet.isOnline()) {
+            return Promise.resolve({
+                ok: false,
+                offline: true,
+                error: "You're offline. Your progress is saved on this device - sign in again when you have a connection."
+            });
+        }
         return P.loadSdk().then(function () {
             var auth = P.auth();
             if (!auth) {
@@ -926,13 +1083,27 @@ var cloudWatchTimer = 0;
                 };
             }
             return fn(auth);
+        }).then(function (r) {
+            if (r && r.ok) window.GDNet && window.GDNet.noteSuccess();
+            return r;
         }).catch(function (e) {
+            if (window.GDNet) window.GDNet.noteFailure();
             // loadSdk() records why it failed; translate that into English.
             var st = P.status();
             if (st === 'sdk-failed' || st === 'init-failed' || st === 'not-configured') {
                 return {
                     ok: false,
                     error: 'Could not reach the account service. Check your connection.'
+                };
+            }
+            /* A network-shaped Firebase failure while the browser still claims
+             * to be online: a captive portal, or a tower that dropped between
+             * the check and the request. Same advice, same reason. */
+            if (e && /network-request-failed|timeout|unavailable/i.test(String(e.code || e.message || ''))) {
+                return {
+                    ok: false,
+                    offline: true,
+                    error: "Couldn't reach the account service. Your progress is saved on this device - try again shortly."
                 };
             }
             return err(e);
@@ -961,7 +1132,7 @@ var cloudWatchTimer = 0;
              * who typed their name in a different case still gets the right
              * answer when the stored document is briefly unreadable. */
             return auth.signInWithEmailAndPassword(fakeEmail(u), password)
-                .then(function (cred) { return afterAuth(cred.user, null, u); });
+                .then(function (cred) { return afterAuth(cred.user, null, u, true); });
         });
     }
 
@@ -1261,6 +1432,13 @@ var cloudWatchTimer = 0;
         signUp: signUp,
         signIn: signIn,
         signOut: signOut,
+
+        /* The mandatory sign-in choice. signIn() resolves with
+         * { needsChoice: true } and stops there - nothing has been written to
+         * local storage or to the account yet - and the caller must come back
+         * with one of 'account' or 'local'. */
+        needsSaveChoice: needsSaveChoice,
+        resolveSaveChoice: resolveSaveChoice,
         changeUsername: changeUsername,
         restore: restore,
         flush: flush,

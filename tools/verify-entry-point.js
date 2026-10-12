@@ -247,12 +247,26 @@ if (entries) {
             missing.length === 0, missing.length ? 'missing: ' + missing.join(', ') : 'all present');
 
         const remote = [...new Set((html.match(/https?:\/\/[^"'\s)]+/g) || [])
-            .filter(u => /unpkg|jsdelivr|cdn/.test(u)))];
-        console.log('  note  ' + (remote.length ? 'loaded from the network at runtime: ' + remote.join(', ')
-            : 'no CDN dependencies'));
-        if (remote.length) {
-            console.log('        the app will show a blank screen with no connection until these are vendored');
-        }
+            .filter(u => /unpkg|jsdelivr|cdnjs|cdn\./.test(u)))];
+        /* A CDN dependency is now a hard failure, not a note.
+         *
+         * index.html used to pull Phaser from unpkg.com. Offline that is a blank
+         * screen - the exact failure the offline requirement exists to prevent -
+         * and a Play reviewer testing in airplane mode sees a white page. Phaser
+         * is vendored at assets/phaser.min.js instead (tools/vendor-phaser.js).
+         *
+         * Font stylesheets are checked separately below: Google Fonts degrades to
+         * a fallback rather than breaking the page, so it is a warning, not this. */
+        ok('no CDN script or stylesheet (the game must boot with no network)',
+            remote.length === 0,
+            remote.length ? 'still loaded from a CDN: ' + remote.join(', ') : 'all assets are local');
+
+        const fontLinks = (html.match(/<link[^>]*fonts\.(googleapis|gstatic)\.com[^>]*>/g) || []);
+        console.log('  note  ' + (fontLinks.length
+            ? fontLinks.length + ' Google Fonts link(s) - offline these fall back to '
+              + 'the next family in UI.FAMILY, which is a clean sans-serif, so the '
+              + 'page still works but does not look identical'
+            : 'no webfont dependency'));
     }
 } else {
     console.log('  skip  no APK to check against');

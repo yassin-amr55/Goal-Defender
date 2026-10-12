@@ -6,8 +6,16 @@
     android:background="#0b1220"
     android:fitsSystemWindows="false">
 
+    <!-- focusable + focusableInTouchMode are what make the soft keyboard appear.
+         Without focusableInTouchMode the WebView never holds focus in touch mode,
+         so the game's hidden <input> can be .focus()ed successfully and the IME
+         still never opens - the tap looks like it does nothing. The game draws
+         its own field and focuses a real DOM input behind it; this is what lets
+         that input actually take keyboard focus. -->
     <WebView
         android:id="@+id/webview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
 </FrameLayout>
