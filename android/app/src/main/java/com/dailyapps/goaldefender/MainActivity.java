@@ -43,6 +43,45 @@ public class MainActivity extends AppCompatActivity {
     /* appassets.androidplatform.net is a domain Android reserves for exactly
      * this. It must also be added to the Firebase console's authorised domains
      * or sign-in fails on the packaged build. */
+    /* The orientation request is made AT MOST ONCE PER PROCESS, and the flag is
+         * static on purpose.
+         *
+         * setRequestedOrientation() forces the Activity to be recreated, and
+         * create() runs again in the new instance. So an unconditional request
+         * asks for landscape -> Activity recreates -> asks again -> recreates
+         * again, and the app visibly restarts until the platform stops honouring
+         * the requests. The user sees it flash and bounce three times before it
+         * settles.
+         *
+         * Guarding with getRequestedOrientation() is NOT enough, and that was my
+         * first attempt: a recreated Activity is a NEW instance whose requested
+         * orientation is reset to the manifest value, so the guard reads
+         * "unspecified", fires again, and the loop is back. The only state that
+         * genuinely survives recreation is a static field, which lives on the
+         * process.
+         *
+         * Honest caveat: on the API 34 emulator I could measure, the guarded and
+         * unguarded builds behave identically - one page load, no recreation
+         * either way. So this is not a reproduced fix, it is a removal of the
+         * only mechanism in this file capable of causing repeated Activity
+         * restarts, which is also the only thing matching "three times before
+         * it opens". If it still happens, the next step is to delete this block
+         * entirely; the manifest stays fullUser and layout.js already renders
+         * the game correctly in portrait. */
+    private static boolean orientationRequested = false;
+
+    private void requestLandscapeOnce() {
+        if (orientationRequested) return;
+        orientationRequested = true;
+        try {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+            Log.i(TAG, "requested landscape (first and only request this process)");
+        } catch (Throwable t) {
+            /* Never let an optimisation stop the app opening. */
+            Log.w(TAG, "could not request landscape; continuing", t);
+        }
+    }
+
     private static final String ORIGIN = "https://appassets.androidplatform.net";
 
     /* "/assets/index.html" - NOT "/assets/www/index.html".
@@ -96,8 +135,7 @@ public class MainActivity extends AppCompatActivity {
         /* Landscape, locked in code rather than in the manifest.
          *
          * The reported bug was that the app opened in portrait with the game's
-         * canvas rotated to landscape inside it, because the manifest said
-         * fullUser and layout.js did the turning. Declaring
+         * canvas rotated to landscape inside it. Declaring
          * screenOrientation="landscape" in the manifest fixed that and cost 13
          * devices:
          *
@@ -108,12 +146,12 @@ public class MainActivity extends AppCompatActivity {
          * honour a fixed orientation from the supported-device catalogue - all
          * tablets and foldables, since Android 12+ may ignore orientation on
          * displays of 600dp and up. Play computes that from the merged manifest
-         * and never sees this line, so all devices stay listed while the app
-         * still opens landscape on every phone.
+         * and never sees requestLandscapeOnce(), so all devices stay listed while
+         * the app still opens landscape on every phone.
          *
-         * Set before setContentView so the rotation happens before the WebView
-         * exists, which is what stops the Activity being recreated mid-load. */
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+         * See requestLandscapeOnce() for why the request is made at most once per
+         * process. That is the whole reason this is a method rather than a line. */
+        requestLandscapeOnce();
 
         /* Full screen. The game is 1280x720 and draws its own stadium; letting the
          * status bar sit on top of it wastes the top of the canvas. */
