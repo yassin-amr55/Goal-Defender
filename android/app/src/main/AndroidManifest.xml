@@ -6,7 +6,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- Portrait and landscape both. The game lays out to 1280x720 and reflows;
+    <!-- The Activity is locked to landscape; see the comment above it. The game
+         itself still reflows for any aspect ratio the phone hands it, and
          DESIGN.md records the measurements the layout was checked against. -->
     <uses-feature android:name="android.hardware.touchscreen" android:required="true" />
 
@@ -18,13 +19,32 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
+        android:largeHeap="true"
         android:theme="@style/Theme.GoalDefender">
 
+        <!-- Landscape, not fullUser. fullUser let the system open the Activity
+             in whatever orientation the phone happened to be held at, so the app
+             launched portrait while the game's layout.js immediately rotated the
+             canvas to landscape inside it. The system and the game disagreed
+             about orientation and the player saw a portrait launch with a
+             sideways game.
+
+             The game is 1280x720 and never benefits from portrait, so the
+             Activity is locked and the system rotates before onCreate. This also
+             removes a recreation during startup: a rotation arriving while the
+             WebView is still loading would recreate the Activity underneath it.
+
+             Note: Android 12+ may ignore orientation requests on large screens
+             (tablets, foldables) for apps targeting API 36. Phones, which is
+             what this is for, are unaffected.
+
+             An XML comment cannot sit between a tag's attributes, so this lives
+             above the element rather than next to the attribute it explains. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
-            android:screenOrientation="fullUser"
+            android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|keyboard|navigation|uiMode|density|fontScale|layoutDirection|locale"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

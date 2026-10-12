@@ -13,8 +13,10 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
@@ -25,6 +27,7 @@ import android.webkit.WebViewClient;
 import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.webkit.WebViewAssetLoader;
+import android.widget.FrameLayout;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -89,9 +92,59 @@ public class MainActivity extends AppCompatActivity {
 
         super.onCreate(savedInstanceState);
 
+        /* Full screen. The game is 1280x720 and draws its own stadium; letting the
+         * status bar sit on top of it wastes the top of the canvas. */
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
         setContentView(R.layout.activity_main);
         web = findViewById(R.id.webview);
+        configureWebView(web);
+        web.loadUrl(START_URL);
 
+        /* Back, in one place only.
+         *
+         * This used to be handled TWICE - once by onKeyDown and once by the
+         * OnBackPressedDispatcher. Both receive KEYCODE_BACK, so a single press
+         * could call web.goBack() and then immediately finish the activity: the
+         * game navigated back and the app closed at the same time. On a screen
+         * with nowhere left to go back to, that reads as the app closing itself.
+         *
+         * The dispatcher is the supported path, so onKeyDown is gone. The
+         * keyboard is dismissed first, because while the name field has focus
+         * back should close the keyboard rather than leave the screen. */
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (hideKeyboard()) return;
+                if (web.canGoBack()) {
+                    web.goBack();
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
+        });
+    }
+
+    /** @return true if a soft keyboard was showing and has now been dismissed. */
+    private boolean hideKeyboard() {
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm == null) return false;
+        View focused = getCurrentFocus();
+        if (focused == null) return false;
+        if (!imm.isAcceptingText()) return false;
+        imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
+        focused.clearFocus();
+        web.requestFocus();
+        return true;
+    }
+
+    /** Everything a WebView needs, in one place, so it can be rebuilt after the
+     *  renderer process dies. Splitting this out is what makes recovery possible:
+     *  a one-shot setup block in onCreate cannot be run a second time. */
+    @SuppressLint("SetJavaScriptEnabled")
+    private void configureWebView(WebView web) {
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         /* The save is entirely localStorage. Without DOM storage the game starts
@@ -178,51 +231,56 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 Log.i(TAG, "loaded " + url);
             }
-        });
 
-        /* Full screen. The game is 1280x720 and draws its own stadium; letting the
-         * status bar sit on top of it wastes the top of the canvas. */
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
-        web.loadUrl(START_URL);
-
-        /* Back, in one place only.
-         *
-         * This used to be handled TWICE - once by onKeyDown and once by the
-         * OnBackPressedDispatcher. Both receive KEYCODE_BACK, so a single press
-         * could call web.goBack() and then immediately finish the activity: the
-         * game navigated back and the app closed at the same time. On a screen
-         * with nowhere left to go back to, that reads as the app closing itself.
-         *
-         * The dispatcher is the supported path, so onKeyDown is gone. The
-         * keyboard is dismissed first, because while the name field has focus
-         * back should close the keyboard rather than leave the screen. */
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            /* The WebView's renderer process died.
+             *
+             * This is the reported "crashes a couple of times before it opens".
+             * The renderer is a SEPARATE process from the app, and when it is
+             * killed - out of memory, a GPU fault, or the system reclaiming it on a
+             * low-memory device - the default behaviour is to take the whole app
+             * down with it. The player sees the app close, taps again, and it may
+             * die again until the system has warmed up. That is exactly a
+             * "crashes a few times, then works" pattern, and no amount of
+             * Activity-level hardening touches it because the crash is one level
+             * down.
+             *
+             * Returning true means "I have handled it, do not kill the app". The
+             * dead WebView is discarded and a fresh one is built in its place,
+             * reloading the game. The player sees a brief reload instead of the
+             * app vanishing. */
             @Override
-            public void handleOnBackPressed() {
-                if (hideKeyboard()) return;
-                if (web.canGoBack()) {
-                    web.goBack();
-                } else {
-                    setEnabled(false);
-                    getOnBackPressedDispatcher().onBackPressed();
-                }
+            public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                Log.e(TAG, "WebView renderer process gone (crashed=" + detail.didCrash()
+                        + "). Rebuilding the WebView rather than letting the app die.");
+                rebuildWebView();
+                return true;
             }
         });
     }
 
-    /** @return true if a soft keyboard was showing and has now been dismissed. */
-    private boolean hideKeyboard() {
-        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-        if (imm == null) return false;
-        View focused = getCurrentFocus();
-        if (focused == null) return false;
-        if (!imm.isAcceptingText()) return false;
-        imm.hideSoftInputFromWindow(focused.getWindowToken(), 0);
-        focused.clearFocus();
-        web.requestFocus();
-        return true;
+    /** Replace a dead WebView with a fresh one and reload the game. */
+    private void rebuildWebView() {
+        try {
+            ViewGroup root = findViewById(R.id.root);
+            if (root != null && web != null) {
+                root.removeView(web);
+                web.destroy();
+            }
+            WebView fresh = new WebView(this);
+            fresh.setId(R.id.webview);
+            fresh.setLayoutParams(new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            if (root != null) root.addView(fresh);
+            web = fresh;
+            configureWebView(web);
+            web.loadUrl(START_URL);
+            Log.i(TAG, "rebuilt WebView after renderer crash");
+        } catch (Throwable t) {
+            /* If even this fails there is nothing sensible left to do but let the
+             * crash happen, so it is logged and rethrown rather than swallowed. */
+            Log.e(TAG, "could not rebuild the WebView", t);
+            throw t;
+        }
     }
 
     @Override

@@ -5,9 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Goal Defender</title>
     <link rel="icon" type="image/png" href="assets/ball.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <!-- Loaded non-render-blocking. A plain <link rel="stylesheet"> to Google Fonts
+         BLOCKS first paint until the request completes or times out, which on a
+         cold start on a slow connection is seconds of white screen - and a
+         WebView that stalls that long is a candidate for being killed during
+         launch. media="print" keeps it out of the critical path; onload flips it
+         to all so the font still applies the moment it arrives.
+
+         main.js already caps the wait for these faces at 1500ms, so the game
+         never starts blocked on a font either way. Offline there is no request
+         at all and UI.FAMILY falls back to the next sans-serif. -->
+    <link rel="stylesheet" media="print" onload="this.media='all'"
+        href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap">
     <style>
         html, body {
             margin: 0;

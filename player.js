@@ -513,8 +513,9 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
      * regardless of what onLine says, because the game demonstrably just worked.
      */
     var netListeners = [];
-    var netKnown = false;      // has a real request succeeded or failed recently?
     var netOnline = true;
+    var netFailures = 0;        // consecutive real-request failures
+    var netEverProbed = false;
 
     function netEmit() {
         netListeners.forEach(function (fn) {
@@ -522,61 +523,80 @@ var ANON_UID_KEY = 'gdAnonLeaderboardUid';
         });
     }
 
-    function netSet(online, certain) {
+    function netSet(online) {
         var changed = netOnline !== online;
         netOnline = online;
-        if (certain) netKnown = true;
         if (changed) netEmit();
         return changed;
     }
 
-    /* Called by every network entry point. A success is proof of connectivity
-     * even when navigator.onLine says otherwise. */
-    function netSucceeded() { return netSet(true, true); }
-    /* A failure is only treated as proof once the browser itself also thinks it
-     * is offline, or once we have already seen a failure - otherwise a single
-     * flaky request would flip the whole UI to OFFLINE mid-game. */
+    /* A real request succeeded: proof of connectivity, whatever the browser says. */
+    function netSucceeded() {
+        netFailures = 0;
+        return netSet(true);
+    }
+
+    /* A real request failed. NOT proof on its own - one flaky request, one DNS
+     * blip, one captive portal intercepting a single host must not put an OFFLINE
+     * badge on a phone sitting on good wifi.
+     *
+     * Two corroborating signals are required:
+     *   - the browser itself reports no network interface, OR
+     *   - a SECOND consecutive request also failed
+     *
+     * Requiring two consecutive failures is the difference between "this request
+     * did not work" and "there is no network", which are not the same claim. */
     function netFailed() {
-        if (navigator.onLine === false) netSet(false, true);
-        else if (netKnown && !netOnline) netSet(false, true);
+        netFailures++;
+        if (navigator.onLine === false || netFailures >= 2) return netSet(false);
         return netOnline;
     }
 
     function netInit() {
-        window.addEventListener('online', function () { netSet(true, false); });
-        window.addEventListener('offline', function () { netSet(false, true); });
-        /* A tablet that wakes from sleep often has no connection and never fires
-         * the offline event, so re-probe whenever the player comes back. */
+        window.addEventListener('online', function () { netFailures = 0; netSet(true); });
+        window.addEventListener('offline', function () { netSet(false); });
+
+        /* A device that wakes from sleep often has no connection and never fires
+         * the offline event, so re-check when the player comes back.
+         *
+         * The FIRST visibilitychange is skipped: it fires as the page loads, not
+         * as the player returns, and probing there meant a network request during
+         * startup that had no reason to exist. */
         document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible') netProbe();
+            if (document.visibilityState !== 'visible') return;
+            if (!netEverProbed) { netEverProbed = true; return; }
+            netProbe();
         });
     }
 
-    /* Cheap reachability check against a real host, with a short timeout. Used to
-     * settle the ambiguous cases without blocking anything. */
+    /* Reachability check against a real host.
+     *
+     * Deliberately ASYMMETRIC: a success clears a stale offline flag, a failure
+     * does NOT set one. This function is the single reason the first offline
+     * build told players on working wifi that they were offline - it fired
+     * during startup, the host it chose was unreachable, and it recorded that as
+     * certain. One third-party host is not evidence about the player's internet;
+     * two failures from the backend we actually use are. */
     function netProbe() {
-        if (!navigator.onLine) { netSet(false, true); return Promise.resolve(false); }
         try {
             return fetch('https://www.gstatic.com/generate_204', { method: 'GET', cache: 'no-store' })
-                .then(function () { netSet(true, true); return true; })
-                .catch(function () { netSet(false, true); return false; });
+                .then(function () { netSucceeded(); return true; })
+                .catch(function () { return netOnline; });   // inconclusive: change nothing
         } catch (e) {
-            netSet(false, true);
-            return Promise.resolve(false);
+            return Promise.resolve(netOnline);
         }
     }
 
     window.GDNet = {
-        isOnline: function () {
-            /* onLine === false is a definite no. onLine === true is only a maybe
-             * until a request has actually proven otherwise. */
-            if (navigator.onLine === false) return false;
-            return netOnline;
-        },
-        /* True only when we are certain - a request really failed, or the browser
-         * says there is no interface. Use this to decide whether to bother the
-         * player with an OFFLINE message at all. */
-        isKnownOffline: function () { return !window.GDNet.isOnline(); },
+        /* Online is the default and it takes real evidence to leave it.
+         *
+         * The badge and the "needs a connection" message both key off this, so a
+         * false positive does not merely mislabel the screen - it refuses the
+         * leaderboard and blocks sign-in for a player who has perfectly good
+         * wifi. navigator.onLine is consulted only alongside a failed request,
+         * never on its own, because Android WebView is unreliable about it. */
+        isOnline: function () { return netOnline; },
+        isKnownOffline: function () { return !netOnline; },
         onChange: function (fn) { netListeners.push(fn); return function () {
             netListeners = netListeners.filter(function (f) { return f !== fn; });
         }; },
