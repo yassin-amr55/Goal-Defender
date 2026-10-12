@@ -20,8 +20,28 @@ sign-in would fail on a network error that looks like bad credentials.
 So assets are served over a real https origin instead:
 
 ```
-https://appassets.androidplatform.net/assets/www/index.html
+https://appassets.androidplatform.net/assets/index.html
 ```
+
+Note there is **no `www/`**. The `stageGame` Gradle task copies the game's files
+into the APK's `assets/` root, so `index.html` lands at `assets/index.html`. The
+`addPathHandler("/assets/", ...)` prefix and the URL path are two halves of the
+same lookup: whatever follows `/assets/` is the path inside the APK.
+
+An earlier build asked for `/assets/www/index.html`. That file does not exist,
+so the path handler returned `null`, and WebView fell back to a real network
+request for a domain that does not resolve publicly. On a device that is a blank
+page reading:
+
+```
+https://appassets.androidplatform.net/assets/www/index.html
+net::ERR_INVALID_RESPONSE
+```
+
+`tools/verify-entry-point.js` now resolves the URL against the files actually in
+the APK, so this fails the check instead of shipping.
+`tools/test-entry-point-catches-the-bug.js` proves the check rejects the real
+broken variants.
 
 `WebViewAssetLoader` (androidx.webkit) intercepts those requests and streams them
 from the APK's assets. The page gets a genuine secure origin, `localStorage`

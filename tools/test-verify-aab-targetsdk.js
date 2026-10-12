@@ -24,6 +24,12 @@ if (!body) { console.error('FAIL  could not find protoAttrValue in verify-aab.js
 const protoAttrValue = new Function('return (' + body[0].replace('function protoAttrValue', 'function') + ')')();
 
 let fail = 0;
+const ok = (n, c, d) => { if (!c) fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (d ? '  [' + d + ']' : '')); };
+/* Strict equality, for assertions about what the parser READ. Aliasing this to
+ * ok() would be a disaster: `true === "35"` is false for the right reason, but
+ * aliasing it the other way - asserting a boolean through check() - makes
+ * check() compare a claim against its own detail text and fail on the wrong
+ * thing. Values go through check(), claims go through ok(). */
 const check = (name, got, want) => {
     const good = got === want;
     if (!good) fail++;
@@ -101,8 +107,21 @@ if (!fs.existsSync(aab)) {
     const m = execFileSync('tar', ['-xOf', aab, 'base/manifest/AndroidManifest.xml'], { maxBuffer: 1 << 28 });
     check('real bundle minSdkVersion', protoAttrValue(m, 'minSdkVersion'), '24');
     check('real bundle targetSdkVersion', protoAttrValue(m, 'targetSdkVersion'), '36');
-    check('real bundle versionCode', protoAttrValue(m, 'versionCode'), '2');
     check('real bundle versionName', protoAttrValue(m, 'versionName'), '2.2');
+
+    /* The versionCode must match what build.gradle declares, not a literal in
+     * this file. Play burns every code it sees, so it gets bumped often, and a
+     * test that hardcodes it goes stale and fails for the wrong reason - which
+     * trains you to ignore it. Read the declaration instead. */
+    const gradle = fs.readFileSync(
+        path.join(__dirname, '..', 'android', 'app', 'build.gradle'), 'utf8');
+    const declared = (gradle.match(/^\s*versionCode\s+(\d+)\s*$/m) || [])[1];
+    ok('build.gradle declares a versionCode', !!declared, 'versionCode ' + declared);
+    check('the bundle carries the versionCode build.gradle declares',
+        protoAttrValue(m, 'versionCode'), declared);
+    ok('that versionCode is above the spent code 1',
+        parseInt(protoAttrValue(m, 'versionCode'), 10) > 1,
+        'versionCode ' + protoAttrValue(m, 'versionCode'));
 }
 
 console.log('');

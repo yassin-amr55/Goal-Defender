@@ -34,15 +34,45 @@ Upload the **AAB**. Play splits it per device; the APK is for local install.
 ### ⚠️ versionCode must be bumped on EVERY upload
 
 Play burns a version code **permanently the moment it sees it** — even if a later
-validation step rejects the release. The targetSdk-35 bundle consumed code 1, so
-the retry failed with:
+validation step rejects the release.
 
-> Version code 1 has already been used. Try another version code.
+| code | what happened to it |
+|---|---|
+| 1 | rejected for targeting API 35 — but still burned |
+| 2 | installed on a device, showed the blank-screen bug below |
+| **3** | **current build** |
 
-Before every upload, increment `versionCode` in `android/app/build.gradle`. It is
-now **2**. Leave `versionName` at `2.2` — that is the human-facing label, and
-bumping it would falsely claim this is a different version of the game than the
-working tree actually holds.
+Before every upload, increment `versionCode` in `android/app/build.gradle`. Leave
+`versionName` at `2.2` — that is the human-facing label, and bumping it would
+falsely claim this is a different version of the game than the working tree
+actually holds.
+
+### ⚠️ the first on-device build was a blank screen
+
+Version code 2 installed, but showed:
+
+```
+https://appassets.androidplatform.net/assets/www/index.html
+net::ERR_INVALID_RESPONSE
+```
+
+`START_URL` asked for `/assets/www/index.html`. The staging task copies the game
+into the APK's `assets/` **root**, so `index.html` is at `assets/index.html` with
+no `www/` directory. The path handler found no file, returned `null`, and WebView
+fell through to a real network request for a domain that does not resolve
+publicly.
+
+It also shipped `?noleaderboard` — a QA flag that gates leaderboard **writes**, so
+no Android player could ever have submitted a score. Both are fixed.
+
+**Why every other check passed while the app was broken:** they verified
+`assets/index.html` was *present* in the APK. Nothing checked the app pointed
+*at* it. Presence is not reachability.
+
+```
+node tools/verify-entry-point.js <apk>              # resolves START_URL against the APK
+node tools/test-entry-point-catches-the-bug.js       # proves the check rejects real bugs
+```
 
 ### Play Console rejected the first upload — all three issues are now fixed
 
@@ -130,7 +160,20 @@ Do not eyeball the artifacts — run the checkers. All three take seconds:
 node tools/verify-upload.js --apk
 node tools/verify-aab.js android/app/build/outputs/bundle/release/app-release.aab <extracted-itch-zip> .
 node tools/verify-r8-kept-what-it-needed.js android/app/build/outputs/apk/release/app-release.apk
+node tools/verify-entry-point.js android/app/build/outputs/apk/release/app-release.apk
+node tools/test-entry-point-catches-the-bug.js
+node tools/test-verify-aab-targetsdk.js
 ```
+
+The last two are **negative tests**: each proves its check actually rejects the
+bugs it was written for, rather than passing vacuously.
+
+### ⚠️ Phaser is loaded from a CDN at runtime
+
+`index.html` pulls Phaser from `https://unpkg.com/phaser@3.70.0`. The app will
+show a blank screen with no internet connection until that is vendored into
+`assets/`. Worth fixing before launch — a Play reviewer testing on a plane will
+see a white screen and reject it.
 
 ---
 

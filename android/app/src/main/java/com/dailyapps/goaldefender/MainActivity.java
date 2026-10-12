@@ -30,8 +30,27 @@ public class MainActivity extends AppCompatActivity {
      * this. It must also be added to the Firebase console's authorised domains
      * or sign-in fails on the packaged build. */
     private static final String ORIGIN = "https://appassets.androidplatform.net";
-    private static final String START_URL =
-            ORIGIN + "/assets/www/index.html?noleaderboard";
+
+    /* "/assets/index.html" - NOT "/assets/www/index.html".
+     *
+     * The stageGame Gradle task copies the game's files into the APK's assets/
+     * root, so index.html lands at assets/index.html with no www/ directory in
+     * between. The earlier "/assets/www/index.html" 404'd inside the app: the
+     * AssetsPathHandler looked for assets/www/index.html, found nothing, and
+     * returned null, so WebView fell through to a real network request for a
+     * domain that does not resolve publicly. On a device that surfaced as a
+     * blank page reading
+     *     https://appassets.androidplatform.net/assets/www/index.html
+     *     net::ERR_INVALID_RESPONSE
+     *
+     * tools/verify-entry-point.js resolves this URL against the files actually
+     * in the APK, so a wrong path fails the build instead of shipping.
+     *
+     * No ?noleaderboard query string either. That flag gates leaderboard WRITES
+     * (MenuScene.submit), and it belongs to the QA capture flow only. Leaving it
+     * on meant no Android player could ever appear on the leaderboard - the one
+     * thing a Play release most needs to get right. */
+    private static final String START_URL = ORIGIN + "/assets/index.html";
 
     private WebView web;
 
